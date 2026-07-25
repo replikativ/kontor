@@ -54,6 +54,7 @@
   (:require [clojure.set]
             [clojure.string :as str]
             [datahike.api :as d]
+            [kontor.analytic :as analytic]
             [kontor.fx.fx :as fx]
             [kontor.money :as money]
             [kontor.reporting.balance :as balance]))
@@ -79,32 +80,42 @@
    filter (ADR-021 — a nil :kontor.posting/ledger is the primary book)."
   [db p]
   (let [pulled (d/pull db
-                       [:db/id
-                        :kontor.posting/amount
-                        :kontor.posting/commodity
-                        :kontor.posting/transaction
-                        {:kontor.posting/ledger [:db/id]}
-                        {:kontor.posting/entity [:db/id]}
-                        {:kontor.posting/partner [:db/id]}
-                        {:kontor.posting/account [:kontor.account/code
-                                                  :kontor.account/path
-                                                  :kontor.account/type
-                                                  :kontor.account/tags]}
-                        {:kontor.posting/account-tags [:kontor.account-tag/name]}
-                        {:kontor.posting/dimensions [:kontor.posting-dimension/axis
-                                                     :kontor.posting-dimension/value]}
-                        ;; ADR-022 analytic distributions (ADR-140). Omitted
-                        ;; from this pull until 2026-07: a percentage-split
-                        ;; cost-centre P&L was literally unreachable through
-                        ;; the report engine, because nothing downstream could
-                        ;; see the split.
-                        {:kontor.posting/analytic-distributions
-                         [:kontor.analytic-distribution/percent
-                          {:kontor.analytic-distribution/plan
-                           [:db/id :kontor.analytic-plan/code]}
-                          {:kontor.analytic-distribution/account
-                           [:db/id :kontor.analytic-account/code
-                            :kontor.analytic-account/path]}]}]
+                       (cond-> [:db/id
+                                :kontor.posting/amount
+                                :kontor.posting/commodity
+                                :kontor.posting/transaction
+                                {:kontor.posting/ledger [:db/id]}
+                                {:kontor.posting/entity [:db/id]}
+                                {:kontor.posting/partner [:db/id]}
+                                {:kontor.posting/account [:kontor.account/code
+                                                          :kontor.account/path
+                                                          :kontor.account/type
+                                                          :kontor.account/tags]}
+                                {:kontor.posting/account-tags [:kontor.account-tag/name]}
+                                {:kontor.posting/dimensions [:kontor.posting-dimension/axis
+                                                             :kontor.posting-dimension/value]}]
+                         ;; ADR-022 analytic distributions (ADR-140). Omitted
+                         ;; from this pull until 2026-07: a percentage-split
+                         ;; cost-centre P&L was literally unreachable through
+                         ;; the report engine, because nothing downstream could
+                         ;; see the split.
+                         ;;
+                         ;; Conditional because `d/pull` of an attribute absent
+                         ;; from the db's schema THROWS `:transact/schema`
+                         ;; rather than returning nil, and a consumer doing no
+                         ;; cost accounting legitimately has no analytic attrs
+                         ;; (ADR-002 cohabitation; group-wise install-schema!).
+                         ;; Reporting must not become the one subsystem that
+                         ;; demands the full kernel schema — a P&L has to run
+                         ;; on whatever schema the consumer installed.
+                         (analytic/distributions-installed? db)
+                         (conj {analytic/distributions-attr
+                                [:kontor.analytic-distribution/percent
+                                 {:kontor.analytic-distribution/plan
+                                  [:db/id :kontor.analytic-plan/code]}
+                                 {:kontor.analytic-distribution/account
+                                  [:db/id :kontor.analytic-account/code
+                                   :kontor.analytic-account/path]}]}))
                        p)
         tx-state (some-> (-> pulled :kontor.posting/transaction :db/id)
                          (#(d/pull db [:kontor.transaction/state] %))

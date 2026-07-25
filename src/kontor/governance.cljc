@@ -314,37 +314,55 @@
    Returns `{:posting :account :missing-plans :bad-totals}` rows:
    `:missing-plans` are the REQUIRED plans not satisfied (nil total = no
    distribution at all); `:bad-totals` are plans the posting distributes to at
-   all whose percents miss 100, required or not."
+   all whose percents miss 100, required or not.
+
+   **Scoped to the schema actually installed.** The two halves are gated
+   independently on their attributes being present in `db-after`'s schema, and
+   the whole pass short-circuits to `[]` when neither is. This is not a
+   weakening: on a db that HAS the analytic schema nothing here changes. It is
+   required because `d/pull` of an attribute absent from the schema THROWS
+   `:error :transact/schema` rather than returning nil, and this predicate runs
+   in the writer on every commit — so an unconditional pull meant no db without
+   the analytic attributes could transact at all. kontor's schema is a menu
+   (ADR-002 cohabitation, group-wise `install-schema!`), a consumer doing no
+   cost accounting legitimately has none of these attrs, and the cljs
+   `node-test` lane runs a hand-written 7-attribute schema that caught exactly
+   this. See `kontor.analytic`'s partial-schema comment."
   [{:keys [db-after] :as report}]
-  (vec
-   (keep
-    (fn [p]
-      (let [pulled (d/pull db-after
-                           [{:kontor.posting/account
-                             [:db/id {:kontor.account/required-analytic-plans [:db/id]}]}
-                            {:kontor.posting/analytic-distributions
-                             [:kontor.analytic-distribution/percent
-                              {:kontor.analytic-distribution/plan [:db/id]}]}]
-                           p)
-            acct (:kontor.posting/account pulled)
-            req  (into #{} (keep :db/id)
-                       (:kontor.account/required-analytic-plans acct))
-            totals (reduce (fn [acc d]
-                             (let [pl (:db/id (:kontor.analytic-distribution/plan d))
-                                   pct (some-> (:kontor.analytic-distribution/percent d)
-                                               money/->amount)]
-                               (if (and pl pct)
-                                 (update acc pl (fnil #(money/add-amount % pct)
-                                                      (money/zero-amount)))
-                                 acc)))
-                           {}
-                           (:kontor.posting/analytic-distributions pulled))
-            missing (analytic/missing-or-short-plans req totals)
-            bad     (analytic/missing-or-short-plans (set (keys totals)) totals)]
-        (when (or (seq missing) (seq bad))
-          {:posting p :account (:db/id acct)
-           :missing-plans missing :bad-totals bad})))
-    (delta-posting-eids report))))
+  (let [req?   (analytic/required-plans-installed? db-after)
+        dists? (analytic/distributions-installed? db-after)]
+    (if-not (or req? dists?)
+      []
+      (vec
+       (keep
+        (fn [p]
+          (let [pulled (d/pull db-after
+                               (cond-> []
+                                 req?   (conj {:kontor.posting/account
+                                               [:db/id {analytic/required-plans-attr [:db/id]}]})
+                                 dists? (conj {analytic/distributions-attr
+                                               [:kontor.analytic-distribution/percent
+                                                {:kontor.analytic-distribution/plan [:db/id]}]}))
+                               p)
+                acct (:kontor.posting/account pulled)
+                req  (into #{} (keep :db/id)
+                           (analytic/required-plans-attr acct))
+                totals (reduce (fn [acc d]
+                                 (let [pl (:db/id (:kontor.analytic-distribution/plan d))
+                                       pct (some-> (:kontor.analytic-distribution/percent d)
+                                                   money/->amount)]
+                                   (if (and pl pct)
+                                     (update acc pl (fnil #(money/add-amount % pct)
+                                                          (money/zero-amount)))
+                                     acc)))
+                               {}
+                               (analytic/distributions-attr pulled))
+                missing (analytic/missing-or-short-plans req totals)
+                bad     (analytic/missing-or-short-plans (set (keys totals)) totals)]
+            (when (or (seq missing) (seq bad))
+              {:posting p :account (:db/id acct)
+               :missing-plans missing :bad-totals bad})))
+        (delta-posting-eids report))))))
 
 ;; ============================================================================
 ;; datalog invariants, post-resolution

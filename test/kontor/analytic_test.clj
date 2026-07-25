@@ -313,3 +313,152 @@
     (testing "an unknown :by is refused rather than silently defaulted"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #":by"
                             (report/marginalize ps {:analytic-plan plan-eid :by :bogus}))))))
+
+;; ============================================================================
+;; 5. Partial schemas — the enforcement must not fire on a db that does no
+;;    cost accounting at all
+;;
+;; kontor's schema is a MENU: ADR-002 has the kernel cohabiting with consumer
+;; apps in one connection, `install-schema!` installs attribute groups, and the
+;; cljs `node-test` lane deliberately hand-writes a 7-attribute schema. Because
+;; `d/pull` of an attribute absent from the schema THROWS `:transact/schema`
+;; rather than returning nil, and because the governor is a `tx-pred` that runs
+;; on EVERY commit, an unconditional analytic pull meant NO db without the
+;; analytic attrs could transact anything at all. CI caught it; these tests pin
+;; it on the JVM side too.
+;;
+;; This is the hazard ADR-140 named one layer further out — "an enforcement
+;; that fires on correct usage is worse than the defect it fixes" — and it is
+;; the same shape as the `:analytic-distributions`-unpostable-through-book
+;; problem, just at the schema level instead of the builder level.
+;; ============================================================================
+
+(def ^:private minimal-schema
+  "The identity attrs plus what the structural validators query — and NOTHING
+   analytic. Mirrors `modules/substrate/test/kontor/validation_cljs_test.cljs`,
+   which is the schema the cljs lane actually runs."
+  [{:db/ident :kontor.account/path :db/valueType :db.type/string
+    :db/unique :db.unique/identity :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.account/type :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.account/active :db/valueType :db.type/boolean
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.commodity/symbol :db/valueType :db.type/string
+    :db/unique :db.unique/identity :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.journal/code :db/valueType :db.type/string
+    :db/unique :db.unique/identity :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.journal/type :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.transaction/state :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.transaction/journal :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.posting/transaction :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.posting/account :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.posting/amount :db/valueType :db.type/bigdec
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.posting/commodity :db/valueType :db.type/ref
+    :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.posting/display-type :db/valueType :db.type/keyword
+    :db/cardinality :db.cardinality/one}])
+
+(defn- minimal-book
+  "A db with `minimal-schema` ONLY — no `:kontor.posting/analytic-distributions`,
+   no `:kontor.account/required-analytic-plans`, no analytic-plan attrs."
+  []
+  (let [cfg  {:store {:backend :memory :id (random-uuid)}
+              :schema-flexibility :write :keep-history? true}
+        _    (d/create-database cfg)
+        conn (d/connect cfg)]
+    (d/transact conn minimal-schema)
+    (d/transact conn [{:kontor.commodity/symbol "EUR"}
+                      {:kontor.journal/code "GEN" :kontor.journal/type :general}
+                      {:kontor.account/path "Assets:Cash" :kontor.account/type :asset
+                       :kontor.account/active true}
+                      {:kontor.account/path "Income:Sales" :kontor.account/type :income
+                       :kontor.account/active true}])
+    conn))
+
+(defn- minimal-entry
+  [db]
+  (let [e #(:db/id (d/pull db [:db/id] %))]
+    [{:db/id -1 :kontor.transaction/journal (e gen)
+      :kontor.transaction/state :draft}
+     {:db/id -2 :kontor.posting/transaction -1
+      :kontor.posting/account (e cash) :kontor.posting/amount 100M
+      :kontor.posting/commodity (e eur) :kontor.posting/display-type :product}
+     {:db/id -3 :kontor.posting/transaction -1
+      :kontor.posting/account (e [:kontor.account/path "Income:Sales"])
+      :kontor.posting/amount -100M
+      :kontor.posting/commodity (e eur) :kontor.posting/display-type :product}]))
+
+(deftest schema-predicates-report-what-is-installed
+  (testing "the full kernel schema has both analytic attrs"
+    (let [db @(book false)]
+      (is (true? (analytic/required-plans-installed? db)))
+      (is (true? (analytic/distributions-installed? db)))))
+  ;; TEETH: the predicate must actually discriminate, or the guards below are
+  ;; vacuously satisfied and would not have caught the CI failure.
+  (testing "the minimal schema has neither"
+    (let [db @(minimal-book)]
+      (is (false? (analytic/required-plans-installed? db)))
+      (is (false? (analytic/distributions-installed? db))))))
+
+(deftest schema-predicates-see-through-an-as-of-wrapper
+  ;; The subtle half, and the one that nearly shipped a permanently-disabled
+  ;; feature. `d/as-of` returns a `datahike.db.AsOfDB` with NO `:schema` field,
+  ;; so the obvious `(contains? (:schema db) attr)` reads nil — on the JVM as
+  ;; well as in cljs. `report-postings` ALWAYS reads through an as-of db, so a
+  ;; field-read guard would have reported "no analytic schema" for every report
+  ;; on every db, silently turning the guard into a kill switch for the very
+  ;; feature it exists to scope. Hence `dbi/-schema`, the protocol method.
+  (let [db   @(book false)
+        aod  (d/as-of db (java.util.Date.))
+        hist (d/history db)]
+    (is (nil? (:schema aod))
+        "the field really is absent on the wrapper — this is why the naive
+         guard fails, and if datahike ever adds it this test documents the
+         change rather than hiding it")
+    (is (true? (analytic/distributions-installed? aod))
+        "but the protocol method sees through the as-of wrapper")
+    (is (true? (analytic/required-plans-installed? aod)))
+    (is (true? (analytic/distributions-installed? hist))
+        "and through the history wrapper")
+    ;; TEETH: still discriminates through the wrapper — not just "always true".
+    (let [mad (d/as-of @(minimal-book) (java.util.Date.))]
+      (is (false? (analytic/distributions-installed? mad))))))
+
+(deftest a-plain-entry-commits-on-a-db-with-no-analytic-schema
+  ;; This is the case CI caught: nothing in the JVM suite covered it, because
+  ;; every JVM fixture installs the full kernel schema.
+  (let [conn (minimal-book)]
+    (testing "the governor accepts it rather than throwing :transact/schema"
+      (is (= :accepted (outcome conn (minimal-entry @conn)))))
+    (testing "and each analytic predicate is individually a no-op"
+      (let [rep (dc/with @conn (minimal-entry @conn))]
+        (is (= [] (gov/analytic-violations rep)))
+        (is (nil? (gov/validate-report rep)))))
+    (testing "the pre-resolution gate pass is a no-op too"
+      (is (= [] (analytic/find-violations @conn (minimal-entry @conn))))
+      (is (nil? (analytic/assert-required-analytic-plans!
+                 @conn (minimal-entry @conn)))))
+    (testing "and the write actually lands"
+      (is (some? (gate/transact-with-validation conn (minimal-entry @conn)))))))
+
+(deftest required-plans-is-empty-not-throwing-on-a-partial-schema
+  (let [db @(minimal-book)]
+    (is (= #{} (analytic/required-plans db cash)))
+    (is (= #{} (analytic/required-plans db [:kontor.account/path "Income:Sales"])))))
+
+(deftest the-guard-scopes-the-check-it-does-not-weaken-it
+  ;; The whole point: on a db that HAS the analytic schema, every refusal from
+  ;; §2/§3 above must still fire. Without this, "make it schema-aware" could be
+  ;; satisfied by disabling the check outright.
+  (let [conn (book true)]
+    (is (= :kontor.analytic/required-plan-unsatisfied
+           (outcome conn (raw-tx-data conn nil))))
+    (is (= :kontor.analytic/required-plan-unsatisfied
+           (outcome conn (raw-tx-data conn [[cc-a 60M] [cc-b 30M]]))))
+    (is (= :accepted (outcome conn (raw-tx-data conn [[cc-a 60M] [cc-b 40M]]))))))

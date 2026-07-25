@@ -28,6 +28,7 @@ file is the reading order over what the code already encodes.
 5. [Write substrate — process, *-tx-data, kontor.book](#5-write-substrate)
    5.1 [Validation gate — vendored `datopia/invariant` + the mandatory `tx-pred` (ADR-011, ADR-140)](#51-validation-gate)
    5.1a [Schema promises are enforced or deleted (ADR-140)](#51a-schema-promises-are-enforced-or-deleted--never-a-third-state)
+   5.1b [The schema is a menu — validators must tolerate partial schemas (ADR-140)](#51b-the-schema-is-a-menu--a-validator-must-not-demand-attributes-the-db-lacks)
    5.2 [`kontor.process` orchestrator (ADR-067)](#52-kontorprocess)
    5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
    5.4 [`kontor.book` verb facade (ADR-095)](#54-kontorbook)
@@ -160,6 +161,22 @@ Three failure shapes to watch for when adding an attribute:
 - **Enforcement that fires on correct usage.** Making `:kontor.account/required-analytic-plans` real would have made such an account unpostable through the verb facade had `:analytic-distributions` not been made reachable in the same change.
 
 Every invariant is pinned by a PAIR of tests: one asserting the refusal, one proving the invariant has **teeth** — that it still accepts the shape it is meant to allow. A validator that rejects everything satisfies "it throws"; only the pair distinguishes enforcement from breakage. (ADR-140)
+
+### 5.1b The schema is a MENU — a validator must not demand attributes the db lacks
+
+kontor's schema is installed in **groups**, and cohabits with consumer apps in one connection (ADR-002). A consumer that does no cost accounting legitimately has no `:kontor.analytic-*` attributes; the cljs `node-test` lane hand-writes a 7-attribute schema on purpose. Any validator on the per-write path must therefore work against a **partial schema**.
+
+The trap: **`d/pull` of an attribute absent from the db's schema throws `:transact/schema`** — it does not return nil. Because the governor is a `tx-pred` that runs on every commit, one unconditional pull means *no db without that attribute can transact anything at all*. `d/q` needs no guard (a plain pattern clause on an undeclared attribute yields `#{}`; `get-else` yields its default) — **only `d/pull` throws**. Hence the rule:
+
+> A validator that runs on every write may only `d/pull` an attribute it has first confirmed is in the db's schema.
+
+Check membership via **`datahike.db.interface/-schema`**, the protocol method — *not* `(:schema db)` and *not* `d/schema`:
+
+- `(:schema db)` is a raw field read (what `kontor.invariant/sanitize-schema` uses) and is **nil on any wrapped db**. `d/as-of` returns a `datahike.db.AsOfDB` with no `:schema` field, on the JVM as much as in cljs — and the report engine always reads through an as-of db. A field-read guard silently reports "attribute absent" for every report on every db, turning the guard into a kill switch for the feature it is scoping.
+- `d/schema` is correct through wrappers but `reduce-kv`s ~1200 schema entries into a fresh map per call — far too expensive per-transact.
+- `-schema` is correct through wrappers and ~60 ns.
+
+This is the same failure shape as an enforcement that fires on correct usage, and the guard **scopes** the check rather than weakening it: where the attributes are installed, nothing changes. (ADR-140 Addendum 1)
 
 ### 5.2 `kontor.process`
 

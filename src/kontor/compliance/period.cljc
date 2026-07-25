@@ -29,6 +29,7 @@
    posting belongs to when multiple periods cover the same date.
    Default tag is `:normal`."
   (:require [datahike.api :as d]
+            [datahike.db.interface :as dbi]
             [kontor.bitemporal :as kbt]
             [kontor.gate :as gate]
             [kontor.money :as money]))
@@ -127,11 +128,22 @@
    Resolves through `tx-by-id` for a transaction built in the SAME tx-data
    (the normal shape — the posting refs a tempid), and falls back to reading
    the effective-date off an already-committed transaction in `db` when the
-   posting attaches to an existing eid or lookup-ref."
+   posting attaches to an existing eid or lookup-ref.
+
+   The db read is gated on `:kontor.transaction/effective-date` being in `db`'s
+   schema: pulling an undeclared attribute throws `:transact/schema`, and a
+   partial-schema db (ADR-002 cohabitation, or the cljs `node-test` lane's
+   hand-written schema) may not declare it. The try/catch below would swallow
+   that, but only by accident and indistinguishably from a genuinely
+   unresolvable ref — so the intent is made explicit rather than left to the
+   exception handler (ADR-140). Read through `dbi/-schema` (the protocol
+   method) and NOT the `:schema` field, which is nil on a wrapped as-of /
+   history db — same rule as `kontor.analytic/attr-installed?`."
   [db posting tx-by-id]
   (let [t (:kontor.posting/transaction posting)]
     (or (:kontor.transaction/effective-date (tx-by-id t))
-        (when (some? t)
+        (when (and (some? t)
+                   (contains? (dbi/-schema db) :kontor.transaction/effective-date))
           (try (:kontor.transaction/effective-date
                 (d/pull db [:kontor.transaction/effective-date] t))
                ;; an unresolvable ref (tempid string with no sibling map) is
