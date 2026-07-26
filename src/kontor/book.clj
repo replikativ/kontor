@@ -369,22 +369,156 @@
 ;; Odoo's equivalent is `account.move._reverse_moves`
 ;; (`addons/account/models/account_move.py:5430`).
 
-(def ^:private reversible-posting-pull
-  [:kontor.posting/account
-   :kontor.posting/amount
-   :kontor.posting/commodity
-   :kontor.posting/partner
-   :kontor.posting/entity
-   :kontor.posting/ledger
-   :kontor.posting/narration
-   :kontor.posting/display-type
-   {:kontor.posting/dimensions [:kontor.posting-dimension/axis
-                                :kontor.posting-dimension/value]}])
-
 (defn- ->eid
   "Unwrap a pulled ref (`{:db/id n}`) to its eid; pass scalars through."
   [v]
   (if (map? v) (:db/id v) v))
+
+;; ----------------------------------------------------------------------------
+;; The reversal's posting mirror, derived from `posting-option-keys` (ADR-170)
+;; ----------------------------------------------------------------------------
+;;
+;; This used to be a hand-kept pull spec plus a hand-kept `cond->`, i.e. the
+;; same allowlist-rebuild the read side already fixed
+;; (`kontor.reporting.option-contract-test`). It failed the same way, four
+;; times, with a different key each time: an attribute the front door could
+;; write that the reversal silently dropped. Two of the drops were P0s.
+;;
+;;   - `:period-tag` — the reversal landed untagged, i.e. in `:normal`. The
+;;     adjustment period never netted to zero while the normal period was
+;;     polluted; worse, `kontor.compliance.period/closed-periods-covering`
+;;     matches a lock on `(= tag period-tag)`, so a reversal re-tagged
+;;     `:normal` was NOT matched by a seal on `:adjustment-13` — reversing an
+;;     entry OUT of a hard-sealed adjustment period was accepted.
+;;   - `:analytic-distributions` — an entry on an account carrying
+;;     `:kontor.account/required-analytic-plans` was IRREVERSIBLE: the gate's
+;;     `kontor.analytic/assert-required-analytic-plans!` refused the
+;;     undistributed reversal. Since ADR-007 makes a correction a reversal
+;;     plus a re-posting and never an in-place edit, such an entry could
+;;     never be corrected at all. On an account that is NOT analytic-required
+;;     the same drop was silent instead: the GL reversed, the analytic ledger
+;;     did not, and every cost-centre report kept the original allocation
+;;     forever.
+;;   - `:narration` / `:display-type` were the inverse — FETCHED by the pull
+;;     spec and re-emitted by neither branch, so a `:tax` or `:section` leg
+;;     came back re-stamped `:product` (which changes both the
+;;     `kontor.governance/balance-violations` grouping and
+;;     `kontor.tax.tax-posting-builder`'s).
+;;
+;; So the mirror is now DERIVED from `build/posting-option-keys` rather than
+;; kept parallel to it, and the two are reconciled at namespace load. A key
+;; the front door admits but the reversal cannot carry is a load error, not a
+;; silent data loss discovered by an auditor.
+
+(def ^:private reversible-posting-options
+  "For every key in `kontor.book.build/posting-option-keys`: `:pull`, the
+   fragment spliced into the reversal's pull spec, and `:read`, the fn that
+   turns a pulled original posting back into that option's value (nil = the
+   original did not carry it, so the reversal does not either).
+
+   Only `:amount` is sign-flipped. In particular an analytic percent is NOT:
+   it is a share of the posting's OWN amount, which is already negated, so
+   negating both would put the allocation back on the positive side — and
+   `kontor.posting.validate` would refuse it outright, since a percent must
+   lie in [0,100]."
+  {:account   {:pull :kontor.posting/account
+               :read #(->eid (:kontor.posting/account %))}
+   :amount    {:pull :kontor.posting/amount
+               :read #(some-> (:kontor.posting/amount %) money/negate-amount)}
+   :commodity {:pull :kontor.posting/commodity
+               :read #(->eid (:kontor.posting/commodity %))}
+   :partner   {:pull :kontor.posting/partner
+               :read #(->eid (:kontor.posting/partner %))}
+   :entity    {:pull :kontor.posting/entity
+               :read #(->eid (:kontor.posting/entity %))}
+   :ledger    {:pull :kontor.posting/ledger
+               :read #(->eid (:kontor.posting/ledger %))}
+   :narration {:pull :kontor.posting/narration
+               :read :kontor.posting/narration}
+   :display-type {:pull :kontor.posting/display-type
+                  :read :kontor.posting/display-type}
+   :period-tag   {:pull :kontor.posting/period-tag
+                  :read :kontor.posting/period-tag}
+   :dimensions
+   {:pull {:kontor.posting/dimensions [:kontor.posting-dimension/axis
+                                       :kontor.posting-dimension/value]}
+    :read (fn [p]
+            (when (seq (:kontor.posting/dimensions p))
+              (reduce (fn [m d]
+                        (update m (:kontor.posting-dimension/axis d)
+                                (fnil conj []) (:kontor.posting-dimension/value d)))
+                      {}
+                      (:kontor.posting/dimensions p))))}
+   :analytic-distributions
+   ;; NEW distribution entities, never the original's. The distribution
+   ;; carries a CARDINALITY-ONE back-ref `:kontor.analytic-distribution/posting`
+   ;; whose `:db/doc` invites reverse traversal, so one entity cannot describe
+   ;; two postings: shared, the reversal's allocation would either be
+   ;; attributed to the original posting or would silently re-point the
+   ;; original's. Sharing would also make the two documents share mutable
+   ;; state, which ADR-007 forbids — the reversal is its own sealed entry. The
+   ;; mirror copies plan / account / percent verbatim; the sign lives on the
+   ;; posting amount, so the cost centre nets to zero.
+   {:pull {:kontor.posting/analytic-distributions
+           [{:kontor.analytic-distribution/plan [:db/id]}
+            {:kontor.analytic-distribution/account [:db/id]}
+            :kontor.analytic-distribution/percent]}
+    :read (fn [p]
+            (when (seq (:kontor.posting/analytic-distributions p))
+              (mapv (fn [d]
+                      (cond-> {}
+                        (:kontor.analytic-distribution/plan d)
+                        (assoc :plan (->eid (:kontor.analytic-distribution/plan d)))
+                        (:kontor.analytic-distribution/account d)
+                        (assoc :account (->eid (:kontor.analytic-distribution/account d)))
+                        (some? (:kontor.analytic-distribution/percent d))
+                        (assoc :percent (:kontor.analytic-distribution/percent d))))
+                    (:kontor.posting/analytic-distributions p))))}})
+
+;; Load-time reconciliation. The only way this fires is a kontor developer
+;; adding a posting option without teaching the reversal to carry it — the
+;; exact edit that shipped four silent data-loss bugs. Failing at require
+;; time makes that impossible to miss.
+(when-not (= (set (keys reversible-posting-options)) build/posting-option-keys)
+  (throw (ex-info (str "kontor.book: the reversal mirror and "
+                       "kontor.book.build/posting-option-keys have diverged. "
+                       "Every posting option the facade accepts must be "
+                       "re-emittable by reverse-tx-data, or a reversal "
+                       "silently drops it (ADR-170). Missing from the "
+                       "mirror: "
+                       (pr-str (vec (sort-by str (remove
+                                                  (set (keys reversible-posting-options))
+                                                  build/posting-option-keys))))
+                       "; unknown to posting-option-keys: "
+                       (pr-str (vec (sort-by str (remove
+                                                  build/posting-option-keys
+                                                  (keys reversible-posting-options)))))
+                       ".")
+                  {:type :kontor.book/reversal-contract-divergence})))
+
+(def ^:private reversible-posting-pull
+  "The pull spec, derived from [[reversible-posting-options]] so it cannot
+   drift from the set of options the reversal re-emits."
+  (mapv :pull (map val (sort-by (comp str key) reversible-posting-options))))
+
+(defn- reverse-posting
+  "Mirror one pulled original posting into a `:postings` entry for the
+   reversal."
+  [pulled]
+  (reduce-kv (fn [m k {:keys [read]}]
+               (let [v (read pulled)]
+                 (cond-> m (some? v) (assoc k v))))
+             {}
+             reversible-posting-options))
+
+(def reverse-option-keys
+  "Every option [[reverse-tx-data]] understands. Strict for the same reason
+   `kontor.book.build/entry-option-keys` is (ADR-124): a mistyped
+   `:reversal-date` used to be dropped in a `select-keys` and the reversal
+   quietly landed on TODAY — in a different period than the one asked for,
+   which is the single thing this builder exists to control."
+  #{:transaction :reversal-date :narration :external-id :journal :period-tag
+    :actor :partner :entity :posted-at :vt-from :vt-to})
 
 (defn resolve-transaction
   "Entity id of the transaction `spec` denotes — an eid, a lookup-ref, or a
@@ -441,8 +575,38 @@
                        legal document and, in a journal with ADR-151
                        allocation on, receives its own gapless number.
      :journal        — defaults to the original's journal.
+     :period-tag     — ADR-014 adjustment-period routing. DEFAULTS TO THE
+                       ORIGINAL'S, per leg. Pass it to place the reversal in
+                       a different period layer; `:period-tag :normal` (or
+                       `nil`) moves it into the normal layer explicitly.
+
+                       Inheriting is the default because a period tag is
+                       half of an entry's period coordinate, coequal with
+                       the effective-date — this builder already inherits
+                       the journal and lets `:reversal-date` place the entry
+                       in time, and the tag is the other axis of the same
+                       address. Dropping it (which is what happened before
+                       ADR-170) leaves the adjustment period never netting
+                       to zero while the normal period carries an amount
+                       that was never booked there, and — because
+                       `kontor.compliance.period/closed-periods-covering`
+                       matches a lock on `(= tag period-tag)` — the only
+                       operation the drop actually ENABLED was booking into
+                       a sealed adjustment period.
+
+                       The legitimate counter-case (an error in period 13
+                       discovered after period 13 closed belongs in the next
+                       open period) is served by saying so: `:reversal-date`
+                       moves it in time and `:period-tag` moves it in layer.
+                       Both are explicit acts by an operator who knows which
+                       book they are correcting, and both are still refused
+                       by a lock on the TARGET period — which is the point.
      :actor          — who is reversing (ADR-150).
      :posted-at / :vt-from / :vt-to — as for `entry!`.
+
+   An option key this set does not name is an ERROR
+   (`:kontor.book/unknown-option`), not a silent drop — see
+   [[reverse-option-keys]].
 
    Refuses, rather than producing something subtly wrong:
      - an unknown transaction                (`:kontor.book/unknown-transaction`)
@@ -453,6 +617,7 @@
        as a duplicate sale in every report
      - one with no postings                  (`:kontor.book/no-postings`)"
   [db {:keys [transaction reversal-date narration external-id journal] :as opts}]
+  (build/check-keys! opts reverse-option-keys "reverse option")
   (let [orig (or (resolve-transaction db transaction)
                  (throw (ex-info (str "kontor.book/reverse: no transaction found for "
                                       (pr-str transaction))
@@ -491,25 +656,17 @@
                                (str "reversal of "
                                     (or (:kontor.transaction/external-id hdr) orig)))
            :postings
-           (mapv (fn [p]
-                   (cond-> {:account   (->eid (:kontor.posting/account p))
-                            :amount    (money/negate-amount (:kontor.posting/amount p))
-                            :commodity (->eid (:kontor.posting/commodity p))}
-                     (:kontor.posting/partner p)
-                     (assoc :partner (->eid (:kontor.posting/partner p)))
-                     (:kontor.posting/entity p)
-                     (assoc :entity (->eid (:kontor.posting/entity p)))
-                     (:kontor.posting/ledger p)
-                     (assoc :ledger (->eid (:kontor.posting/ledger p)))
-                     (seq (:kontor.posting/dimensions p))
-                     (assoc :dimensions
-                            (reduce (fn [m d]
-                                      (update m (:kontor.posting-dimension/axis d)
-                                              (fnil conj [])
-                                              (:kontor.posting-dimension/value d)))
-                                    {}
-                                    (:kontor.posting/dimensions p)))))
-                 ps)}
+           ;; `(contains? opts :period-tag)` and not `(:period-tag opts)`:
+           ;; `:period-tag :normal` / `nil` must be able to say "move this
+           ;; correction into the normal layer", which is indistinguishable
+           ;; from "not passed" under a truthiness test.
+           (let [override? (contains? opts :period-tag)
+                 tag       (:period-tag opts)]
+             (mapv (fn [p]
+                     (cond-> (reverse-posting p)
+                       (and override? tag)       (assoc :period-tag tag)
+                       (and override? (nil? tag)) (dissoc :period-tag)))
+                   ps))}
           (when external-id {:external-id external-id})))
         orig))))
 

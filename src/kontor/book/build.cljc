@@ -122,10 +122,24 @@
    - `:analytic-distributions` — ADR-022 cost-centre splits. Same defect,
      worse consequence once ADR-140 made `:kontor.account/required-analytic-plans`
      actually refuse an undistributed posting: an account naming a required
-     plan would have become unpostable through `kontor.book` entirely."
+     plan would have become unpostable through `kontor.book` entirely.
+   - `:narration` — the PER-LEG description
+     (`:kontor.posting/narration`), distinct from the transaction-level
+     one. `kontor.reporting.ledger` and `kontor.reporting.explain` both read
+     it and fall back to the transaction narration, so before ADR-170 it was
+     a documented, read, reversible attribute that no `kontor.book` caller
+     could write.
+   - `:display-type` — `:product` (the default) / `:tax` / `:line` /
+     `:section` / `:note`. Load-bearing, not cosmetic: `:section` and
+     `:note` are EXCLUDED from the sum-to-zero fold by both
+     `kontor.posting.validate/balance-affecting?` and
+     `kontor.governance/balance-violations`, and
+     `kontor.tax.tax-posting-builder` groups by it. Admitted here so
+     `kontor.book/reverse!` can re-emit the original's type instead of
+     re-stamping every leg `:product` (ADR-170)."
   [default-commodity default-entity default-partner default-ledger
    {:keys [account amount commodity entity partner ledger dimensions
-           period-tag analytic-distributions] :as p}]
+           period-tag analytic-distributions narration display-type] :as p}]
   (when (nil? account)
     (throw (ex-info "kontor.book: each :postings entry needs :account" {:posting p})))
   (when (nil? amount)
@@ -145,6 +159,8 @@
       lg               (assoc :kontor.posting/ledger lg)
       (seq dimensions) (assoc :kontor.posting/dimensions (->dimensions dimensions))
       period-tag       (assoc :kontor.posting/period-tag period-tag)
+      narration        (assoc :kontor.posting/narration narration)
+      display-type     (assoc :kontor.posting/display-type display-type)
       (seq analytic-distributions)
       (assoc :kontor.posting/analytic-distributions
              (->analytic-distributions analytic-distributions)))))
@@ -192,11 +208,27 @@
    set admits but `->posting` ignores is silently dropped. Both failure modes
    have already shipped here — `:ledger` (note 160), then `:period-tag` and
    `:analytic-distributions` (ADR-140), each reachable through neither path
-   while the schema documented them as meaningful."
-  #{:account :amount :commodity :entity :partner :ledger :dimensions
-    :period-tag :analytic-distributions})
+   while the schema documented them as meaningful.
 
-(defn- check-keys!
+   THIS SET IS ALSO THE REVERSAL CONTRACT (ADR-170). `kontor.book/reverse!`
+   derives its posting mirror from it, and `kontor.book` refuses to LOAD if
+   it names a key the reversal cannot carry — because the same defect had by
+   then recurred four times with a different key each time (`:ledger`,
+   `:period-tag`, `:analytic-distributions`, `:actor`), each one a write the
+   front door accepted and the reversal silently dropped.
+
+   `:narration` and `:display-type` joined the set in ADR-170: both were
+   already fetched by the reversal's pull spec and re-emitted by nothing,
+   i.e. dead pull keys guarding attributes no facade caller could write in
+   the first place."
+  #{:account :amount :commodity :entity :partner :ledger :dimensions
+    :period-tag :analytic-distributions :narration :display-type})
+
+(defn check-keys!
+  "Throw `:kontor.book/unknown-option` unless every key of `opts` is in
+   `known`. Public so every entry point of the facade — `build-input` and
+   `kontor.book/reverse-tx-data` — refuses an unrecognised key with the same
+   message instead of each growing its own silent `select-keys` (ADR-170)."
   [opts known what]
   (let [unknown (remove known (keys opts))]
     (when (seq unknown)
