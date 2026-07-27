@@ -119,7 +119,8 @@
               :title (:kontor.audit-doc/title r)
               :description (:kontor.audit-doc/description r)
               :storage-uri (str "s3://cfdi-nomina/" code ".xml")
-              :content-hash "deadbeef"})
+              :content-hash "deadbeef"
+              :uploaded-by-uid "payroll-emitter"})
             (d/transact conn
                         [{:kontor.audit-doc/code code
                           :kontor.audit-doc/category (:kontor.audit-doc/category r)

@@ -117,11 +117,11 @@
                   :commencement-date, :term-months, :payment-amount,
                   :payment-frequency (#{:monthly :quarterly :annual}),
                   :payment-timing (#{:in-advance :in-arrears}),
-                  :commodity, :discount-rate.
+                  :commodity, :discount-rate, :changed-by-uid.
    Optional: :underlying-asset-desc, :initial-direct-costs,
              :prepaid-at-commencement, :incentives-received,
              :purchase-option-price, :entity, :origin-document,
-             :note, :changed-by-uid, :vt-from / :vt-to (default
+             :note, :vt-from / :vt-to (default
              :vt-from = :commencement-date)."
   [conn {:keys [vt-from vt-to commencement-date] :as opts}]
   (let [now (Date.)]
@@ -139,7 +139,13 @@
    ADR-069 audit denorms `:imported-as-of`,
    `:imported-original-commencement-date`,
    `:imported-original-term-months` — those are recorded on the
-   :lease so `import-lease!` (ADR-069) can validate them later."
+   :lease so `import-lease!` (ADR-069) can validate them later.
+
+   `:changed-by-uid` — the recording actor — is REQUIRED (ADR-153; it was
+   optional before). `kontor.lease.schema/approval-policy-seeds` puts
+   `:no-self-approval` on the `:active → :terminated` edge, and since
+   ADR-150 that rule fails CLOSED on a nil creator: a lease recorded
+   without one could never be terminated."
   [_db {:keys [code name lessor asset-class commencement-date term-months
                payment-amount payment-frequency payment-timing commodity
                discount-rate underlying-asset-desc initial-direct-costs
@@ -173,6 +179,14 @@
   (when (neg? (.signum ^BigDecimal discount-rate))
     (throw (ex-info ":discount-rate must be non-negative"
                     {:discount-rate discount-rate})))
+  (when-not changed-by-uid
+    (throw (ex-info
+            (str ":changed-by-uid required (ADR-153) — the recording actor is "
+                 "stamped as :kontor.audit/create-uid, which the seeded "
+                 ":no-self-approval policy on the :active → :terminated edge "
+                 "compares the terminating actor against. Without it this lease "
+                 "can never be terminated.")
+            {:type :kontor.lease/recorder-required :code code})))
   (let [row (cond-> {:db/id tempid
                      :kontor.lease/code code
                      :kontor.lease/name name
@@ -199,6 +213,10 @@
               entity                  (assoc :kontor.lease/entity entity)
               origin-document         (assoc :kontor.lease/origin-document origin-document)
               note                    (assoc :kontor.lease/note note)
+              ;; The recording actor IS the creator — stamp
+              ;; :kontor.audit/create-uid so ADR-038 :no-self-approval can fire
+              ;; on termination. UNCONDITIONAL since ADR-153.
+              :always                 (assoc :kontor.audit/create-uid changed-by-uid)
               imported?               (assoc :kontor.lease/imported? imported?)
               imported-as-of          (assoc :kontor.lease/imported-as-of imported-as-of)
               imported-original-commencement-date
@@ -206,10 +224,7 @@
                      imported-original-commencement-date)
               imported-original-term-months
               (assoc :kontor.lease/imported-original-term-months
-                     imported-original-term-months)
-              ;; The recording actor IS the creator — stamp :kontor.audit/create-uid
-              ;; so ADR-038 :no-self-approval can fire on termination.
-              changed-by-uid          (assoc :kontor.audit/create-uid changed-by-uid))
+                     imported-original-term-months))
         ;; status-tx needs `db` for the legal-transition check; we
         ;; pass nil because `:from :nil :to :draft` is the very first
         ;; entry — record-status-change-tx-data tolerates this when

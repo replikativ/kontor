@@ -80,7 +80,15 @@
    asset (e.g. `commence!`'s ROU asset).
 
    Optional `:changed-at` (default now) injects the timestamp so the
-   builder is deterministic from `(db, opts)`."
+   builder is deterministic from `(db, opts)`.
+
+   `:changed-by-uid` — the acquiring actor — is REQUIRED (ADR-153; it was
+   optional before). `kontor.asset.schema/approval-policy-seeds` puts
+   `:no-self-approval` on the `:in-service → :disposed` edge, and since
+   ADR-150 that rule fails CLOSED on a nil creator: an asset acquired
+   without a recorded acquirer could never be disposed. Stamping only when
+   the caller happened to pass the key made the control's availability
+   depend on an omission no error message mentioned."
   [db {:keys [code name class acquisition-cost acquisition-commodity
               acquisition-date in-service? in-service-date salvage-value
               asset-account accumulated-account expense-account
@@ -93,6 +101,14 @@
   (when-not acquisition-cost      (throw (ex-info ":acquisition-cost required" {})))
   (when-not acquisition-commodity (throw (ex-info ":acquisition-commodity required" {})))
   (when-not acquisition-date      (throw (ex-info ":acquisition-date required" {})))
+  (when-not changed-by-uid
+    (throw (ex-info
+            (str ":changed-by-uid required (ADR-153) — the acquiring actor is "
+                 "stamped as :kontor.audit/create-uid, which the seeded "
+                 ":no-self-approval policy on the :in-service → :disposed edge "
+                 "compares the disposing actor against. Without it this asset "
+                 "can never be disposed.")
+            {:type :kontor.asset/acquirer-required :code code})))
   (let [target-state (if in-service? :in-service :planned)
         isd (when in-service? (or in-service-date acquisition-date))
         asset-tempid tempid
@@ -116,10 +132,11 @@
               origin-document     (assoc :kontor.asset/origin-document origin-document)
               serial-number       (assoc :kontor.asset/serial-number serial-number)
               location            (assoc :kontor.asset/location location)
-              note                (assoc :kontor.asset/note note)
-              ;; The acquirer IS the creator — stamp :kontor.audit/create-uid so
-              ;; ADR-038 :no-self-approval can fire on disposal.
-              changed-by-uid      (assoc :kontor.audit/create-uid changed-by-uid))
+              note                (assoc :kontor.asset/note note))
+        ;; The acquirer IS the creator — stamp :kontor.audit/create-uid so
+        ;; ADR-038 :no-self-approval can fire on disposal. UNCONDITIONAL
+        ;; since ADR-153.
+        row (assoc row :kontor.audit/create-uid changed-by-uid)
         status-tx (sm/record-status-change-tx-data
                    db
                    (cond-> {:entity asset-tempid

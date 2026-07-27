@@ -194,7 +194,12 @@ When NOT to use it:
         :compute-provider (datev/compute-provider {...})
         :posting-builder  (datev/posting-builder  {...})
         :emit-provider    (datev/emit-provider    {...})
-        :journal [:journal/code "PAYROLL"]})
+        :journal [:journal/code "PAYROLL"]
+        ;; ADR-153 — who ran it. Stamped as :kontor.audit/create-uid so the
+        ;; seeded :no-self-approval policy on :computed -> :approved has a
+        ;; creator to compare a later approver against. Approve with
+        ;; (payroll/approve-run! conn {:run <eid> :actor "cfo"}).
+        :actor "payroll-clerk"})
 ```
 
 ## What it does NOT do

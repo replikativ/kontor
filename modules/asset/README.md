@@ -133,6 +133,9 @@ When NOT to use it:
         :acquisition-cost 60000.00M
         :acquisition-commodity [:commodity/symbol "EUR"]
         :acquisition-date #inst "2026-01-15"
+        ;; ADR-153 — the acquirer; stamped as :kontor.audit/create-uid, which
+        ;; the seeded :no-self-approval policy on disposal reads.
+        :changed-by-uid "asset-manager"
         :in-service? true
         :asset-account [:account/code "0440"]      ; SKR04: Maschinen
         :accumulated-account [:account/code "0470"]; accumulated AfA

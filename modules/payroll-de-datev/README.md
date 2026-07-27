@@ -82,7 +82,8 @@ present.
    :buchungsbeleg-path "/tmp/lohn-buchungsbeleg-2026-05.csv"
    :compute-provider compute-provider
    :posting-builder  posting-builder
-   :emit-provider    emit-provider})
+   :emit-provider    emit-provider
+   :actor            "payroll-clerk"})   ; ADR-153 — who ran it
 ;; Side effects:
 ;;   - parses the EXTF Buchungsbeleg
 ;;   - posts the Bruttomethode GL entries (Lohnaufwand + LSt + SozV)

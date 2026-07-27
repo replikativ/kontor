@@ -164,9 +164,11 @@
    Required opts:
      :year, :employer-name, :employer-uid, :employees, :storage-uri.
    Optional:
-     :code (default 'l16-<year>'), :uploaded-by-uid, :employer-fbnr."
+     :code (default 'l16-<year>'), :employer-fbnr,
+     :uploaded-by-uid (default the machine actor \"at-elda-emitter\" — ADR-153)."
   [db {:keys [year employer-name employer-uid employer-fbnr employees
-              storage-uri code uploaded-by-uid]}]
+              storage-uri code uploaded-by-uid]
+}]
   (when-not storage-uri  (throw (ex-info ":storage-uri required" {})))
   (let [bytes (emit-l16-xml
                {:year year
@@ -179,15 +181,23 @@
         title (str "L16 Lohnzettel " year)
         tx-data (audit-doc/create-doc-tx-data
                  db
-                 (cond-> {:code code
-                          :type :l16-lohnzettel
-                          :title title
-                          :description (str "BMF L16 annual submission for " year)
-                          :content-hash sha
-                          :storage-uri storage-uri
-                          :category :payroll-filing
-                          :language :de}
-                   uploaded-by-uid (assoc :uploaded-by-uid uploaded-by-uid)))]
+                 {:code code
+                  :type :l16-lohnzettel
+                  :title title
+                  :description (str "BMF L16 annual submission for " year)
+                  :content-hash sha
+                  :storage-uri storage-uri
+                  :category :payroll-filing
+                  :language :de
+                  ;; ADR-153 — an :audit-doc must name its uploader. This one
+                  ;; is produced by an UNATTENDED emit, so the truthful answer
+                  ;; is known and constant: the system emitted it. A NAMED
+                  ;; machine actor, not a sentinel — no human ever equals it,
+                  ;; so it cannot launder a self-approval into a four-eyes one
+                  ;; the way a placeholder would. Register it with
+                  ;; `:kontor.actor/kind :system`; override for a
+                  ;; human-triggered submission.
+                  :uploaded-by-uid (or uploaded-by-uid "at-elda-emitter")})]
     {:tx-data tx-data
      :bytes bytes
      :hash sha

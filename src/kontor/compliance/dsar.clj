@@ -409,13 +409,14 @@
      :kind           keyword (:access | :erasure | :portability | …)
      :received-at    instant (the statutory clock starts here)
      :deadline-days  long (GDPR 30, CCPA 45, LGPD 15, …)
+     :changed-by-uid the intake actor (ADR-153; see
+                     `file-request-tx-data`)
 
    Optional:
      :jurisdiction   ref to :country
      :received-via   keyword (:email | :portal | :postal | :api)
      :supporting-doc ref to :audit-doc (the intake form)
      :notes          string
-     :changed-by-uid ref to :kontor.audit/create-uid
      :vt-from / :vt-to  valid-time bounds (default :vt-from = now)"
   [conn {:keys [vt-from vt-to] :as opts}]
   (let [now (Date.)]
@@ -428,7 +429,19 @@
 (defn file-request-tx-data
   "Pure tx-data builder for `file-request!` (ADR-068). Optional
    `:tempid` (default `\"dsar-1\"`) and `:received-state-at` (default
-   now) thread cross-step references + the status-history changed-at."
+   now) thread cross-step references + the status-history changed-at.
+
+   `:changed-by-uid` — the intake actor — is REQUIRED (ADR-153; it was
+   optional through ADR-052). It is stamped as `:kontor.audit/create-uid`,
+   and [[approval-policy-seeds]] — installed in EVERY kontor db via
+   `kontor.core/install-schema!` — puts `:no-self-approval` on every
+   `→ :fulfilled` edge. Since ADR-150 made that rule fail CLOSED on a nil
+   creator, a request filed without an intake actor can never be
+   fulfilled — and GDPR Art. 12(3) puts a one-month deadline on
+   fulfillment, so the omission does not merely inconvenience the
+   controller, it manufactures a regulatory breach. Required rather than
+   defaulted for the reason any four-eyes anchor must be: a sentinel two
+   people can both equal is not a second pair of eyes."
   [db {:keys [external-id partner kind received-at deadline-days
               jurisdiction received-via supporting-doc notes
               changed-by-uid tempid received-state-at]
@@ -438,6 +451,15 @@
   (when-not kind          (throw (ex-info ":kind required" {})))
   (when-not received-at   (throw (ex-info ":received-at required" {})))
   (when-not deadline-days (throw (ex-info ":deadline-days required" {})))
+  (when-not changed-by-uid
+    (throw (ex-info
+            (str ":changed-by-uid required (ADR-153) — the intake actor is "
+                 "stamped as :kontor.audit/create-uid, which the seeded "
+                 ":no-self-approval policy on the → :fulfilled edge compares the "
+                 "fulfilling actor against. Without it this request can never be "
+                 "fulfilled, and the GDPR Art. 12(3) one-month clock runs anyway.")
+            {:type :kontor.dsar-request/intake-actor-required
+             :external-id external-id})))
   (let [row (cond-> {:db/id tempid
                      :kontor.dsar-request/external-id external-id
                      :kontor.dsar-request/partner partner
@@ -449,21 +471,21 @@
               jurisdiction   (assoc :kontor.dsar-request/jurisdiction jurisdiction)
               received-via   (assoc :kontor.dsar-request/received-via received-via)
               supporting-doc (assoc :kontor.dsar-request/supporting-doc supporting-doc)
-              notes          (assoc :kontor.dsar-request/notes notes)
-              ;; The intake person IS the creator — stamp :kontor.audit/create-uid
-              ;; so ADR-038 :no-self-approval can fire on fulfillment
-              ;; (the intake person can't also be the fulfiller).
-              changed-by-uid (assoc :kontor.audit/create-uid changed-by-uid))
+              notes          (assoc :kontor.dsar-request/notes notes))
+        ;; The intake person IS the creator — stamp :kontor.audit/create-uid
+        ;; so ADR-038 :no-self-approval can fire on fulfillment (the intake
+        ;; person can't also be the fulfiller). UNCONDITIONAL since ADR-153.
+        row (assoc row :kontor.audit/create-uid changed-by-uid)
         status-tx (sm/record-status-change-tx-data
                    db
-                   (cond-> {:entity tempid
-                            :entity-type :dsar-request
-                            :facet :kontor.dsar-request/state
-                            :from :nil
-                            :to :received
-                            :changed-at (or received-state-at (Date.))
-                            :reason :dsar-received}
-                     changed-by-uid (assoc :changed-by-uid changed-by-uid)))]
+                   {:entity tempid
+                    :entity-type :dsar-request
+                    :facet :kontor.dsar-request/state
+                    :from :nil
+                    :to :received
+                    :changed-at (or received-state-at (Date.))
+                    :changed-by-uid changed-by-uid
+                    :reason :dsar-received})]
     (into [row] status-tx)))
 
 (defn advance-state!

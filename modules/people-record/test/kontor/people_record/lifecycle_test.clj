@@ -64,7 +64,8 @@
                  :type :dpia
                  :storage-uri "s3://test/dpia-jane.pdf"
                  :title "DPIA — Jane's track record processing"
-                 :category :hr-monitoring-consent})
+                 :category :hr-monitoring-consent
+                 :uploaded-by-uid "hr-lead"})
         dpia (ref-eid (d/db conn) :kontor.audit-doc/code "DPIA-jane-track-record-2026")
 
         ;; Grant consent for hr-track-record scope (legal basis:
@@ -105,7 +106,8 @@
              conn {:code "REVIEW-DOC-jane-2026"
                    :type :performance-review
                    :storage-uri "s3://test/review-jane-2026.pdf"
-                   :category :hr-track-record})
+                   :category :hr-track-record
+                   :uploaded-by-uid "hr-lead"})
           review-doc (ref-eid (d/db conn) :kontor.audit-doc/code "REVIEW-DOC-jane-2026")
           ;; The reviewer is also an employee — bootstrap another person
           _ (person/create-person! conn {:external-id "P-bob"
@@ -144,7 +146,8 @@
              conn {:code "PROMOTION-LETTER-jane-2027"
                    :type :promotion-letter
                    :storage-uri "s3://test/promotion-jane.pdf"
-                   :category :hr-track-record})
+                   :category :hr-track-record
+                   :uploaded-by-uid "hr-lead"})
           promo-doc (ref-eid (d/db conn) :kontor.audit-doc/code "PROMOTION-LETTER-jane-2027")
           _ (pr/record-promotion!
              conn {:code "PROMO-jane-senior-2027"

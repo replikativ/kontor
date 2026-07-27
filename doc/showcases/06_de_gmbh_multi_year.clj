@@ -91,6 +91,13 @@
 
 (def conn (core/create-test-db))
 (hr/install! conn)
+;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+;; minting a phantom the SoD comparison could never match. Enroll the
+;; clerk the runs are attributed to.
+(d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                   :kontor.actor/name "Payroll clerk"
+                   :kontor.actor/kind :person}])
 (datev/install! conn)
 (pr/install! conn)
 (de-retention/install! conn)
@@ -192,7 +199,11 @@
        :type :dpia
        :storage-uri "s3://acme/dpia-employees-2026.pdf"
        :title "DPIA — Mitarbeiter-Personalakte (BDSG §26)"
-       :category :hr-monitoring-consent})
+       :category :hr-monitoring-consent
+       ;; ADR-153 — the uploader is the doc's creator, and every kontor db
+       ;; seeds :no-self-approval on privilege waiver. A doc with no
+       ;; recorded uploader could never be declassified.
+       :uploaded-by-uid "hr-lead"})
 
 (def dpia (d/q '[:find ?e . :in $ ?c
                  :where [?e :kontor.audit-doc/code ?c]]
@@ -310,6 +321,7 @@
          :variable-inputs {:buchungsbeleg-content fixture-buchungsbeleg}
          :run-code "RUN-DE-2026-11"
          :tx-code "TX-PAYROLL-DE-2026-11"
+         :actor "payroll-clerk"  ; ADR-153
          :journal j-pay
          :commodity eur}))
 
@@ -363,7 +375,8 @@ misclassified-tx-eid
  conn {:code "PROMO-LETTER-schmidt-2027"
        :type :promotion-letter
        :storage-uri "s3://acme/promo-schmidt.pdf"
-       :category :hr-track-record})
+       :category :hr-track-record
+       :uploaded-by-uid "hr-lead"})
 (def promo-doc (d/q '[:find ?e . :in $ ?c :where [?e :kontor.audit-doc/code ?c]]
                     (d/db conn) "PROMO-LETTER-schmidt-2027"))
 

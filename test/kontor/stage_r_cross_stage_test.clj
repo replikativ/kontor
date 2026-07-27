@@ -89,6 +89,13 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (hr/install! conn)
+    ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+    ;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+    ;; minting a phantom the SoD comparison could never match. Enroll the
+    ;; clerk the runs are attributed to.
+    (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                       :kontor.actor/name "Payroll clerk"
+                       :kontor.actor/kind :person}])
     (d/transact
      conn
      [;; Three commodities for the three jurisdictions.
@@ -216,6 +223,7 @@
            :accounts accounts
            :run-code run-code
            :tx-code tx-code
+           :actor "payroll-clerk"  ; ADR-153
            :journal journal})))
 
 ;; ============================================================================
@@ -462,6 +470,13 @@
 (defn- bootstrap-with-real-de []
   (let [conn (core/create-test-db)]
     (hr/install! conn)
+    ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+    ;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+    ;; minting a phantom the SoD comparison could never match. Enroll the
+    ;; clerk the runs are attributed to.
+    (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                       :kontor.actor/name "Payroll clerk"
+                       :kontor.actor/kind :person}])
     (datev/install! conn)
     (d/transact
      conn
@@ -617,6 +632,7 @@
                  :variable-inputs {:buchungsbeleg-content @de-buchungsbeleg-fixture}
                  :run-code "JANE-DE-REAL-2025-11"
                  :tx-code "TX-JANE-DE-REAL-2025-11"
+                 :actor "payroll-clerk"  ; ADR-153
                  :journal j-de
                  :commodity eur})
         ;; US + CA — mocks (sample shapes; bounded fixture surface).

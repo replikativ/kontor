@@ -481,10 +481,20 @@
     [[:db/retract period-eid :kontor.period/locked-at (:kontor.period/locked-at e)]]))
 
 (defn reopen!
-  "Admin-only: clear `:kontor.period/locked-at` on a SOFT-closed period.
-   Refuses if the period is :kontor.period/sealed-at-marked. Routes through
-   the gate (ADR-068). The reopen IS a datahike commit, so the audit
-   chain documents it.
+  "Clear `:kontor.period/locked-at` on a SOFT-closed period. Refuses if the
+   period is :kontor.period/sealed-at-marked. Routes through the gate
+   (ADR-068). The reopen IS a datahike commit, so the audit chain
+   documents it.
+
+   NOT admin-only, and this docstring claimed it was. kontor does not
+   authenticate and does not authorize (ADR-002 §1.2) — there is no
+   kernel notion of an admin for a check to consult, and nothing in this
+   function or the gate restricts who may call it. Whoever can transact
+   can reopen a soft-closed period; the control is that the reopen is a
+   dated, attributable commit an auditor sees, not that it is refused.
+   A consumer wanting authorization enforces it in its own layer, or
+   makes the period irrevocable by SEALING it rather than soft-closing it
+   (`seal!` — which this function does refuse).
 
    The pure tx-data builder is `reopen-tx-data`."
   [conn period-eid]

@@ -39,6 +39,13 @@
   (let [conn (core/create-test-db)]
     (v/install-invariants! conn)
     (hr/install! conn)
+    ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+    ;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+    ;; minting a phantom the SoD comparison could never match. Enroll the
+    ;; clerk the runs are attributed to.
+    (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                       :kontor.actor/name "Payroll clerk"
+                       :kontor.actor/kind :person}])
     (at-chart/install! conn)
     ;; payroll accounts from the module's own starter chart (note 194 §1 P0-4)
     (payroll-chart/install! conn)
@@ -128,6 +135,7 @@
                                         :commodity-eid eur}
                       :run-code "ACME-2026-01-001"
                       :tx-code "TX-ACME-2026-01"
+                      :actor "payroll-clerk"  ; ADR-153
                       :journal journal
                       :commodity eur
                       :vt-from jan-31})
