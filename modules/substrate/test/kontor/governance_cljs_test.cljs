@@ -30,7 +30,13 @@
    {:db/ident :kontor.posting/transaction :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.posting/posted-at   :db/valueType :db.type/instant :db/cardinality :db.cardinality/one}
    {:db/ident :kontor.transaction/state   :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
-   {:db/ident :kontor.transaction/journal :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}])
+   {:db/ident :kontor.transaction/journal :db/valueType :db.type/keyword :db/cardinality :db.cardinality/one}
+   ;; ADR-153 — the attribution family. `:kontor.actor/uid` is
+   ;; `:db.unique/identity` in the kernel schema; keep that here so the cljs
+   ;; lane exercises the same shape the guard sees on the JVM.
+   {:db/ident :kontor.actor/uid           :db/valueType :db.type/string  :db/unique :db.unique/identity :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.actor/active        :db/valueType :db.type/boolean :db/cardinality :db.cardinality/one}
+   {:db/ident :kontor.audit/create-uid    :db/valueType :db.type/ref     :db/cardinality :db.cardinality/one}])
 
 (def cash [:kontor.account/path "Assets:Cash"])
 (def rev  [:kontor.account/path "Income:Sales"])
@@ -85,6 +91,29 @@
                  ;; 3. a retractEntity of a POSTED leg is REJECTED (sealing, via db-before)
                  (is (= :sealing/silent-retract-of-posted
                         (outcome (dc/with db [[:db/retractEntity pd]])))
-                     "validate-report catches destruction of a posted entity in cljs")))
+                     "validate-report catches destruction of a posted entity in cljs")
+                 ;; 4-6. ADR-153 attribution. `retract-entity` retracts the
+                 ;; inbound ref datoms too, so deleting the actor nils
+                 ;; `:kontor.audit/create-uid` on everything they created —
+                 ;; which, with `:no-self-approval` failing closed, strands
+                 ;; those entities. The guard must run in the browser too:
+                 ;; simmis pre-checks writes optimistically, and a pre-check
+                 ;; that accepts what the writer will reject is worse than no
+                 ;; pre-check.
+                 (let [db2 (:db-after (dc/with db [{:db/id -1 :kontor.actor/uid "alice"}
+                                                   {:db/id -2 :kontor.transaction/journal :cash
+                                                    :kontor.transaction/state :draft
+                                                    :kontor.audit/create-uid -1}]))
+                       alice (d/q '[:find ?a . :where [?a :kontor.actor/uid "alice"]] db2)
+                       doc   (d/q '[:find ?e . :where [?e :kontor.audit/create-uid _]] db2)]
+                   (is (= :kontor.actor/attribution-destroyed
+                          (outcome (dc/with db2 [[:db/retractEntity alice]])))
+                       "deleting an actor is refused in cljs")
+                   (is (= :kontor.actor/attribution-destroyed
+                          (outcome (dc/with db2 [[:db/retract doc :kontor.audit/create-uid alice]])))
+                       "a bare creator retraction is refused in cljs")
+                   (is (= :accepted
+                          (outcome (dc/with db2 [{:db/id alice :kontor.actor/active false}])))
+                       "deactivation — the modelled path — is still permitted in cljs"))))
              (<! (d/delete-database cfg))
              (done)))))

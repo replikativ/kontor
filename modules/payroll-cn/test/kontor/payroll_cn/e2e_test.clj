@@ -99,6 +99,13 @@
   []
   (let [conn (core/create-test-db)]
     (hr/install! conn)
+    ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+    ;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+    ;; minting a phantom the SoD comparison could never match. Enroll the
+    ;; clerk the runs are attributed to.
+    (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                       :kontor.actor/name "Payroll clerk"
+                       :kontor.actor/kind :person}])
     (cn-chart/install! conn)
     (cn/install! conn)
     (d/transact conn
@@ -211,6 +218,7 @@
                       :accounts accounts
                       :run-code "RUN-CN-2026-04-001"
                       :tx-code "TX-PAYROLL-CN-2026-04"
+                      :actor "payroll-clerk"  ; ADR-153
                       :journal journal
                       :commodity cny})
         db' (:db-after report)

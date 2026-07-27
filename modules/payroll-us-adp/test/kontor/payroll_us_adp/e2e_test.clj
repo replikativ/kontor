@@ -42,6 +42,11 @@
   []
   (let [conn (core/create-test-db)
         _ (hr/install! conn)
+        ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and
+        ;; a :db.unique/identity lookup-ref REFUSES an unenrolled actor.
+        _ (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                             :kontor.actor/name "Payroll clerk"
+                             :kontor.actor/kind :person}])
         _ (adp/install! conn)]
     (d/transact conn
                 [{:db/id "usd" :kontor.commodity/symbol "USD" :kontor.commodity/precision 2}
@@ -165,6 +170,7 @@
                       :accounts accounts
                       :run-code "RUN-US-2026-04-001"
                       :tx-code "TX-PAYROLL-US-2026-04"
+                      :actor "payroll-clerk"  ; ADR-153
                       :journal journal
                       :commodity usd
                       :variable-inputs {:csv-source csv

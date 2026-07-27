@@ -15,6 +15,12 @@
      per (entity, ledger, commodity); non-zero rejects. Delta-scoped (only
      touched txs), so cost is O(delta), independent of ledger size — the
      inductive double-entry property.
+   - **attribution** — any RETRACTED `:kontor.audit/create-uid` /
+     `:kontor.actor/uid` datom not re-asserted in the same delta rejects
+     (ADR-153). Guards the fail-closed `:no-self-approval` rule against its
+     own denial-of-service dual: `[:db/retractEntity <actor>]` retracts the
+     inbound ref datoms too, so it nils the creator on everything that actor
+     created.
    - **sealing** — any RETRACTED datom whose entity was `:kontor.posting/posted-at`
      in `db-before` rejects. Sees `db-before` + retract flags, so it guards
      `:db/retractEntity` and in-place edits of posted rows — which the
@@ -161,6 +167,70 @@
                     (d/q '[:find ?x . :in $ ?e :where [?e :kontor.posting/posted-at ?x]]
                          db-before (:e dd)))]
      {:eid (:e dd) :attr (:a dd)})))
+
+;; ============================================================================
+;; audit attribution, post-resolution — ADR-153
+;; ============================================================================
+
+(def non-retractable-attribution-attrs
+  "See `kontor.actor/non-retractable-attrs` — duplicated as a literal rather
+   than required, because `kontor.actor` requires `datahike.api` for its
+   registration/read surface while this ns is the writer-side predicate and
+   stays a leaf. The two sets are pinned equal by
+   `attribution-guard-mirrors-the-gate` in `kontor.governance-test`."
+  #{:kontor.audit/create-uid :kontor.actor/uid})
+
+(defn attribution-violations
+  "Every RETRACTED datom in the delta on a
+   [[non-retractable-attribution-attrs]] member that is NOT accompanied by a
+   re-assertion of the same `[e a]`.
+
+   The unmatched-pair test is what separates a DELETION from an UPDATE.
+   Asserting a new value over a `:db.cardinality/one` attribute produces a
+   retraction of the old value in the same delta, so a blanket refusal would
+   also refuse `(register-actor! conn {:uid \"sarah\" :active false})` —
+   deactivation, which is the modelled alternative this guard is pushing
+   callers toward. Post-resolution is the only place that distinction is
+   visible at all: pre-resolution, `{:db/id e :kontor.actor/name \"x\"}` and
+   `[:db/retract e :kontor.actor/name \"x\"]` are different syntax for
+   deltas that only the resolver can tell apart.
+
+   Why this family exists: `:no-self-approval` refuses a transition whose
+   entity carries no `:kontor.audit/create-uid` (ADR-150 — a control that
+   passes on missing data is deficient by design, PCAOB AS 2201 ¶.A3(b)).
+   Fail-closed turns \"defeat four-eyes\" into \"deny four-eyes\", which is
+   better but is still an attack. And it is a CHEAP one:
+   `datahike.db.transaction/retract-entity` retracts every ref datom
+   pointing AT the entity, so `[:db/retractEntity <actor>]` — an ordinary
+   leaver cleanup — nils the creator on everything that actor ever created.
+   Refusing the retraction is what makes the fail-closed verdict safe to
+   hold.
+
+   **A creator datom is only protected while its entity SURVIVES.** ADR-007
+   permits an explicit `:db/purge`, and ADR-050 retention expiry / ADR-052
+   erasure exist precisely to remove entities wholesale; when the whole
+   entity goes, its creator datom going with it is not un-attribution, it is
+   the erasure those controls already govern (legal hold guards which
+   entities may be destroyed; this predicate guards which SURVIVING ones may
+   be stripped of attribution). `:kontor.actor/uid` is NOT so qualified —
+   deleting the actor is the vector, whether or not anything else is left of
+   them, and deactivation is the modelled alternative.
+
+   Short-circuits on a delta with no retractions."
+  [{:keys [db-after tx-data]}]
+  (let [gone (filterv (fn [d] (and (false? (:added d))
+                                   (non-retractable-attribution-attrs (:a d))))
+                      tx-data)]
+    (if (empty? gone)
+      []
+      (let [asserted (into #{} (comp (filter :added) (map (juxt :e :a))) tx-data)
+            survives? (fn [e] (some? (d/q '[:find ?a . :in $ ?e :where [?e ?a _]]
+                                          db-after e)))]
+        (vec
+         (for [dd gone
+               :when (not (contains? asserted [(:e dd) (:a dd)]))
+               :when (or (= :kontor.actor/uid (:a dd)) (survives? (:e dd)))]
+           {:eid (:e dd) :attr (:a dd)}))))))
 
 ;; ============================================================================
 ;; Delta helpers shared by the report-based mirrors below
@@ -444,9 +514,9 @@
    `ex-info` to reject. Returns nil on success. Pure over the report.
 
    Order mirrors `kontor.validation/validate-and-apply` so the two seams
-   produce the SAME error for the same bad write: legal-hold before sealing
-   (the more-specific \"blocked by hold X\" wins over the generic
-   \"silent retract of posted\"), then sealing, then the period locks, then
+   produce the SAME error for the same bad write: legal-hold before
+   attribution before sealing (the more-specific \"blocked by hold X\" wins
+   over the generic \"silent retract of posted\"), then sealing, then the period locks, then
    the state machine, then balance, then analytic distributions, then the
    datalog invariants.
 
@@ -461,6 +531,16 @@
   (when-let [v (seq (hold-violations report))]
     (throw (ex-info "Refused: destructive write blocked by active legal hold"
                     {:type :kontor.legal-hold/purge-blocked :violations (vec v)})))
+  (when-let [v (seq (attribution-violations report))]
+    (throw (ex-info
+            (str "Refused: this write retracts audit attribution. "
+                 ":kontor.audit/create-uid is what :no-self-approval compares an "
+                 "approver against and the rule fails CLOSED (ADR-150), so nilling "
+                 "it makes the entity permanently unapprovable rather than freely "
+                 "approvable. :db/retractEntity on a :kontor.actor does this to "
+                 "every entity that actor created — datahike retracts the inbound "
+                 "ref datoms too. Deactivate the actor instead. (ADR-153)")
+            {:type :kontor.actor/attribution-destroyed :violations (vec v)})))
   (when-let [v (seq (sealing-violations report))]
     (throw (ex-info "Sealing violation: destructive write against a posted entity"
                     {:type :sealing/silent-retract-of-posted :violations (vec v)})))

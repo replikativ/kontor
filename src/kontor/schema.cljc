@@ -5019,6 +5019,41 @@
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one}
 
+   {:db/ident       :kontor.approval-policy/effective-from
+    :db/valueType   :db.type/instant
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Cutover date (ADR-153). The policy gates only
+                     transitions whose `:changed-at` is at or after this
+                     instant; earlier transitions are not judged by it.
+                     Absent = applies to every transition, which is the
+                     pre-ADR-153 behaviour and stays the default.
+
+                     This is the migration seam for a control that fails
+                     CLOSED. `:no-self-approval` refuses a transition whose
+                     entity carries no `:kontor.audit/create-uid` (ADR-150),
+                     and a book with pre-ADR-150 rows cannot retroactively
+                     learn who created them — so without a cutover, turning
+                     the control on makes historical entities permanently
+                     unapprovable. Set `effective-from` to the go-live date
+                     and the control governs new work only; backfill
+                     attribution for the old rows with
+                     `kontor.actor/backfill-create-uid!` if they must stay
+                     approvable. Precedent: ADR-101's
+                     `:kontor.provision/effective-from` (statutory date,
+                     distinct from book-entry date).
+
+                     DELIBERATELY NOT part of
+                     `:kontor.approval-policy/identity`. That attribute is a
+                     `:db/tupleAttrs` composite, and datahike cannot extend a
+                     tuple on a database that already exists
+                     (`:transact/schema \"Update not supported for these
+                     schema attributes\"`) — adding it to the tuple would make
+                     this schema un-upgradable in place, which is the exact
+                     problem it exists to solve. It also SHOULD not be part of
+                     identity: two rows differing only by cutover date are the
+                     same control, and the composite is what makes
+                     `install-seeds!` idempotent."}
+
    {:db/ident       :kontor.approval-policy/identity
     :db/valueType   :db.type/tuple
     :db/tupleAttrs  [:kontor.approval-policy/entity-type

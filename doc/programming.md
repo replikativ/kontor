@@ -141,23 +141,40 @@ duties, supporting docs, reason notes).
 
 ```clojure
 ;; A :status-transition row registers a legal edge.
-{:status-transition/entity-type :invoice
- :status-transition/facet       :invoice/status
- :status-transition/from        :draft
- :status-transition/to          :sent
- :status-transition/active      true
- :status-transition/name        "Send Invoice"}
+{:kontor.status-transition/entity-type :invoice
+ :kontor.status-transition/facet       :kontor.invoice/status
+ :kontor.status-transition/from        :draft
+ :kontor.status-transition/to          :sent
+ :kontor.status-transition/active      true
+ :kontor.status-transition/name        "Send Invoice"}
 
-;; An :approval-policy enforces governance on the edge.
-{:approval-policy/entity-type     :invoice
- :approval-policy/facet           :invoice/status
- :approval-policy/transition-from :paid
- :approval-policy/transition-to   :cancelled
- :approval-policy/requires-supporting-doc true
- :approval-policy/requires-non-empty-reason-note true
- :approval-policy/no-self-approval true
- :approval-policy/active true}
+;; An :approval-policy enforces governance on the edge. ONE RULE PER ROW —
+;; :kontor.approval-policy/rule is a single :db.type/keyword, not a set of
+;; booleans, so three rules on one edge means three rows that differ only in
+;; :rule. (:kontor.approval-policy/identity, the unique composite tuple that
+;; makes seeding idempotent, includes :rule for exactly this reason.)
+{:kontor.approval-policy/entity-type     :invoice
+ :kontor.approval-policy/facet           :kontor.invoice/status
+ :kontor.approval-policy/transition-from :paid
+ :kontor.approval-policy/transition-to   :cancelled
+ :kontor.approval-policy/rule            :requires-supporting-doc
+ :kontor.approval-policy/active          true}
 ```
+
+The supported `:kontor.approval-policy/rule` values are exactly the keywords
+`kontor.workflow.status-machine/check-policy` dispatches on:
+`:no-self-approval`, `:requires-actor`, `:requires-supporting-doc`,
+`:requires-non-empty-reason-note`, `:requires-three-way-match-pass`,
+`:requires-dpia-supporting-doc`, `:requires-works-agreement-ref`. An
+unrecognised rule keyword is a **no-op** (forward-compatibility for rules a
+later ADR adds), so a typo governs nothing and says nothing — check the value
+against that list.
+
+`:kontor.approval-policy/effective-from` (optional, `:db.type/instant`) scopes
+a policy to transitions dated at or after a cutover. Use it when switching on
+a control — notably `:no-self-approval`, which refuses a transition whose
+entity records no `:kontor.audit/create-uid` — on a book with history that
+predates the attribution. (ADR-153)
 
 Every status change goes through `kontor.workflow.status-machine/record-status-
 change!` (or `record-status-change-tx-data` for composition). The

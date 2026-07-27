@@ -61,15 +61,18 @@
         title (str "mBGM " period-str)
         tx-data (audit-doc/create-doc-tx-data
                  db
-                 (cond-> {:code code
-                          :type :mbgm
-                          :title title
-                          :description (str "ÖGK mBGM submission for " period-str)
-                          :content-hash sha
-                          :storage-uri storage-uri
-                          :category :payroll-filing
-                          :language :de}
-                   uploaded-by-uid (assoc :uploaded-by-uid uploaded-by-uid)))]
+                 {:code code
+                  :type :mbgm
+                  :title title
+                  :description (str "ÖGK mBGM submission for " period-str)
+                  :content-hash sha
+                  :storage-uri storage-uri
+                  :category :payroll-filing
+                  :language :de
+                  ;; ADR-153 — see `kontor.payroll-at.emit/emit-l16-tx-data`:
+                  ;; an unattended regulator emit names the SYSTEM that
+                  ;; produced it, which is a real actor, not a sentinel.
+                  :uploaded-by-uid (or uploaded-by-uid "at-elda-emitter")})]
     {:tx-data tx-data
      :bytes bytes
      :hash sha

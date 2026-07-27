@@ -24,9 +24,12 @@
    orchestration shape; it does NOT bundle per-vendor rate tables,
    per-jurisdiction CoA, or vendor API credentials."
   (:require [datahike.api :as d]
+            [kontor.actor.ref :as actor-ref]
+            [kontor.gate :as gate]
             [kontor.provider.payroll-provider :as pp]
             [kontor.posting :as posting]
-            [kontor.workflow.process :as process])
+            [kontor.workflow.process :as process]
+            [kontor.workflow.status-machine :as sm])
   (:import [java.math BigDecimal]))
 
 ;; ============================================================================
@@ -74,12 +77,37 @@
 ;; ============================================================================
 
 (defn create-payroll-run-tx-data
-  "Pure tx-data builder for the :payroll-run row + state-transition."
-  [_db {:keys [code pay-period provider-id facts tempid]
+  "Pure tx-data builder for the :payroll-run row.
+
+   `:actor` — whoever ran the payroll — is REQUIRED (ADR-153). Until then
+   this builder had no actor slot AT ALL, so no payroll run in kontor ever
+   carried `:kontor.audit/create-uid`, while
+   `kontor.hr.schema/approval-policy-seeds` puts `:no-self-approval` on the
+   `:computed → :approved` edge and its own docstring calls that \"the
+   load-bearing edge\". Once ADR-150 made the rule fail CLOSED on a nil
+   creator, every payroll approval in kontor-hr became unreachable. The
+   suite stayed green because nothing anywhere transitioned a run to
+   `:approved` — see [[approve-run-tx-data]], which is the other half of
+   this fix.
+
+   The value goes through `kontor.actor/->ref`: pure, cljs-safe, and
+   fail-closed by construction — `:kontor.actor/uid` is
+   `:db.unique/identity`, so an unregistered actor makes datahike refuse
+   the write rather than mint a phantom the SoD comparison could never
+   match."
+  [_db {:keys [code pay-period provider-id facts actor tempid]
         :or {tempid "payroll-run-1"}}]
   (when-not code        (throw (ex-info ":code required" {})))
   (when-not pay-period  (throw (ex-info ":pay-period required" {})))
   (when-not provider-id (throw (ex-info ":provider-id required" {})))
+  (when-not actor
+    (throw (ex-info
+            (str ":actor required (ADR-153) — the actor that ran the payroll is "
+                 "stamped as :kontor.audit/create-uid, which the seeded "
+                 ":no-self-approval policy on the :computed → :approved edge "
+                 "compares the approving actor against. Without it this run can "
+                 "never be approved, and therefore never posted.")
+            {:type :kontor.payroll-run/actor-required :code code})))
   (let [gross-total (->> facts (map :gross) (reduce (fn [a v] (.add ^BigDecimal a ^BigDecimal v)) 0M))
         net-total   (->> facts (map :net)   (reduce (fn [a v] (.add ^BigDecimal a ^BigDecimal v)) 0M))]
     [{:db/id tempid
@@ -88,7 +116,49 @@
       :kontor.payroll-run/provider-id provider-id
       :kontor.payroll-run/state :computed
       :kontor.payroll-run/control-total-gross gross-total
-      :kontor.payroll-run/control-total-net net-total}]))
+      :kontor.payroll-run/control-total-net net-total
+      :kontor.audit/create-uid (actor-ref/->ref actor)}]))
+
+;; ============================================================================
+;; approve-run! — the edge the policy was seeded for
+;; ============================================================================
+
+(defn approve-run-tx-data
+  "Pure tx-data driving a `:payroll-run` `:computed → :approved` through
+   the ADR-034 status machine, so the ADR-038 `:no-self-approval` policy
+   `kontor.hr.schema` seeds on that edge actually fires (ADR-153).
+
+   This function did not exist before ADR-153, and its absence is why the
+   ADR-150 regression shipped green: the seeded policy was unreachable
+   dead data, so no test could observe that it refused every approval.
+   `run-payroll!` also wrote `:kontor.payroll-run/state :computed` as a
+   plain attribute rather than through the status machine, which is why
+   `:from` is read from the entity here rather than assumed.
+
+   Required opts: `:run` (eid), `:actor` (the APPROVING actor — must
+   differ from the one that ran it, which is the whole point).
+   Optional: `:reason` / `:reason-note` / `:supporting-doc` /
+   `:changed-at`."
+  [db {:keys [run actor reason reason-note supporting-doc changed-at]}]
+  (when-not run   (throw (ex-info ":run required" {})))
+  (when-not actor (throw (ex-info ":actor required — an approval nobody signed is not an approval" {})))
+  (sm/record-status-change-tx-data
+   db
+   (cond-> {:entity run
+            :entity-type :payroll-run
+            :facet :kontor.payroll-run/state
+            :to :approved
+            :changed-by-uid (actor-ref/->ref actor)
+            :changed-at (or changed-at (java.util.Date.))
+            :reason (or reason :payroll-approved)}
+     reason-note    (assoc :reason-note reason-note)
+     supporting-doc (assoc :supporting-doc supporting-doc))))
+
+(defn approve-run!
+  "Approve a computed payroll run. See [[approve-run-tx-data]]."
+  [conn opts]
+  (gate/transact-with-validation
+   conn (approve-run-tx-data (d/db conn) opts)))
 
 ;; ============================================================================
 ;; run-payroll!
@@ -117,6 +187,12 @@
                          (consumer-supplied CoA)
      :run-code         — string for :kontor.payroll-run/code
      :tx-code          — string for the :kontor.transaction/code
+     :actor            — the actor running the payroll (ADR-153).
+                         Stamped as :kontor.audit/create-uid on the
+                         :payroll-run and threaded onto the GL entry, so
+                         the seeded :no-self-approval policy on
+                         :computed → :approved has something to compare a
+                         later approver against. See `approve-run!`.
 
    Optional opts:
      :emit-provider     — satisfies PayrollEmitProvider
@@ -130,7 +206,7 @@
      :ledgers-map       — map ledger-keyword → :ledger eid for the
                           parallel-ledger / book-vs-tax split per
                           ADR-021. Threaded to build-postings.
-: required by US ASC 710 PTO + 401(k)
+                          Required by US ASC 710 PTO + 401(k)
                           match accruals to land on :us-gaap book
                           ledger only (the IRC §404(a)(6) timing
                           difference); the DE Urlaubsrückstellung also
@@ -154,7 +230,7 @@
   [conn {:keys [pay-period entity employments compute-provider
                 posting-builder emit-provider accounts run-code tx-code
                 variable-inputs ledger ledgers-map state-allocations
-                fx-provider journal commodity vt-from vt-to]
+                fx-provider journal commodity actor vt-from vt-to]
          :or {emit-provider (pp/->LocalfileEmitProvider {})}}]
   (when-not pay-period       (throw (ex-info ":pay-period required" {})))
   (when-not entity           (throw (ex-info ":entity required" {})))
@@ -163,6 +239,7 @@
   (when-not posting-builder  (throw (ex-info ":posting-builder required" {})))
   (when-not run-code         (throw (ex-info ":run-code required" {})))
   (when-not tx-code          (throw (ex-info ":tx-code required" {})))
+  (when-not actor            (throw (ex-info ":actor required (ADR-153) — see create-payroll-run-tx-data" {})))
   (let [pp-step
         (fn [db _ctx]
           (let [pp-eid (if (number? pay-period)
@@ -197,7 +274,11 @@
                                            (or vt-from (java.util.Date.))
                                            :kontor.transaction/narration
                                            (str "Payroll run " run-code)
-                                           :kontor.transaction/state :draft}
+                                           :kontor.transaction/state :draft
+                                           ;; ADR-153 — the GL entry carries the
+                                           ;; same attribution as the run.
+                                           :kontor.audit/create-uid
+                                           (actor-ref/->ref actor)}
                                     journal (assoc :kontor.transaction/journal journal))
                                   :postings postings})
                 tx-frag (posting/build-transaction tx-input)
@@ -223,6 +304,7 @@
                               :pay-period pp-eid
                               :provider-id (pp/provider-id compute-provider)
                               :facts facts
+                              :actor actor
                               :tempid "payroll-run-1"})
                 run-frag (if (seq emit-tempids)
                            ;; The single-row map produced by

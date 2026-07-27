@@ -38,6 +38,13 @@
 (defn- bootstrap []
   (let [conn (core/create-test-db)]
     (hr/install! conn)
+    ;; ADR-153 — run-payroll! resolves :actor via kontor.actor/->ref, and a
+    ;; :db.unique/identity lookup-ref REFUSES an unenrolled actor rather than
+    ;; minting a phantom the SoD comparison could never match. Enroll the
+    ;; clerk the runs are attributed to.
+    (d/transact conn [{:kontor.actor/uid "payroll-clerk"
+                       :kontor.actor/name "Payroll clerk"
+                       :kontor.actor/kind :person}])
     (jp-chart/install! conn)
     (pjp-chart/install! conn)
     (d/transact conn
@@ -223,6 +230,7 @@
                       :accounts accounts
                       :run-code "ACME-JP-2026-05-001"
                       :tx-code "TX-ACME-JP-2026-05"
+                      :actor "payroll-clerk"  ; ADR-153
                       :journal journal
                       :commodity jpy})
         db (:db-after report)

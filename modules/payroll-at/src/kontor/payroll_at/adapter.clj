@@ -87,6 +87,7 @@
                                                   \"9876543210\" emp-eid-2}}
           :run-code \"ACME-2026-01-001\"
           :tx-code  \"TX-ACME-2026-01\"
+          :actor    \"payroll-clerk\"       ; ADR-153 — who ran it
           :journal  journal-eid
           :commodity eur-eid})
    ```

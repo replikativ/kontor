@@ -136,8 +136,11 @@
         :kontor.approval-policy/active           true}
 
    and pass `:changed-by-uid` in `opts` (`:no-self-approval` compares it
-   against the entity's `:kontor.audit/create-uid`). See
-   `kontor.workflow.status-machine/apply-policy` for the supported rules."
+   against the entity's `:kontor.audit/create-uid`, and refuses when
+   either side is nil — ADR-150). See
+   `kontor.workflow.status-machine/check-policy` for the supported rules
+   (`check-policies` is the entry point that runs them; there is no
+   `apply-policy`, which this docstring pointed at)."
   ([conn requirement] (approve-requirement! conn requirement nil))
   ([conn requirement opts]
    (let [eid (resolve-requirement (d/db conn) requirement)]
