@@ -126,6 +126,7 @@
    holds by construction."
   (:require [datahike.api :as d]
             [kontor.book.build :as build]
+            [kontor.clock :as clock]
             [kontor.gate :as gate]
             [kontor.money :as money]
             [kontor.numbering :as numbering]
@@ -308,7 +309,15 @@
    kontor.book verb; composable into a kontor.workflow.process step list.
    Requires :journal + :effective-date explicitly (it is pure). Use entry! /
    the named verbs for the ergonomic path (journal resolved by type,
-   effective-date defaulted to now)."
+   effective-date defaulted to now).
+
+   Pure in the ADR-068 sense: identical inputs give identical tx-data. The one
+   value it still defaults is `:posted-at`, which comes from
+   `kontor.clock/now` — so bind `kontor.clock/*now*` when you need two calls
+   to agree (ADR-171). Before that binding existed this docstring was simply
+   wrong: the builder read the wall clock, and two calls milliseconds apart
+   differed in `:kontor.transaction/posted-at` and in every leg's
+   `:kontor.posting/posted-at`."
   build/entry-tx-data)
 
 (defn entry!
@@ -343,7 +352,7 @@
                                                   (:journal-code-hint opts)))
 
                  (nil? (:effective-date opts))
-                 (assoc :effective-date (java.util.Date.)))]
+                 (assoc :effective-date (clock/now)))]
      ;; ADR-124 — refuse a ref that does not resolve BEFORE any tx-data is
      ;; emitted, with the verb slot named. Without this a bare string in an
      ;; account slot was read by datahike as a tempid and the money went
@@ -651,7 +660,7 @@
          (merge
           (select-keys opts [:posted-at :vt-from :vt-to :actor :partner :entity])
           {:journal        (or journal (->eid (:kontor.transaction/journal hdr)))
-           :effective-date (or reversal-date (java.util.Date.))
+           :effective-date (or reversal-date (clock/now))
            :narration      (or narration
                                (str "reversal of "
                                     (or (:kontor.transaction/external-id hdr) orig)))
@@ -741,7 +750,7 @@
                                                  (:journal-code-hint opts)))
 
                 (nil? (:effective-date opts))
-                (assoc :effective-date (java.util.Date.)))
+                (assoc :effective-date (clock/now)))
         built (try (assert-refs-resolve! (d/db conn) opts')   ; ADR-124
                    {:input (build-input opts')}
                    (catch clojure.lang.ExceptionInfo e

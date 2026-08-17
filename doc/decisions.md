@@ -31,7 +31,7 @@ file is the reading order over what the code already encodes.
    5.1a [Schema promises are enforced or deleted (ADR-140)](#51a-schema-promises-are-enforced-or-deleted--never-a-third-state)
    5.1b [The schema is a menu — validators must tolerate partial schemas (ADR-140)](#51b-the-schema-is-a-menu--a-validator-must-not-demand-attributes-the-db-lacks)
    5.2 [`kontor.process` orchestrator (ADR-067)](#52-kontorprocess)
-   5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
+   5.3 [Every business write exposes a `*-tx-data` builder (ADR-068, ADR-171)](#53-tx-data-builders)
    5.4 [`kontor.book` verb facade + ref/option discipline + `reverse!` (ADR-095, ADR-124, ADR-152, ADR-170)](#54-kontorbook)
    5.5 [Gapless per-journal legal document numbering (ADR-151)](#55-legal-document-numbering)
 6. [Reports as marginalizations](#6-reports-as-marginalizations)
@@ -203,6 +203,12 @@ A `kontor.process` is a pure list of `{:builder ... :args ...}` steps. `run-proc
 **Every business write exposes a pure builder that returns tx-data**. The `!` wrapper is a thin shell that routes the builder's output through `transact-with-validation`. E.g. `post-transaction-tx-data` + `post-transaction!`; `record-status-change-tx-data` + `record-status-change!`; `import-lease-tx-data` + `import-lease!`. Builders compose into `kontor.process` steps without touching a connection. Consumers can dry-run any write, diff against the current db, or batch multiple builders into one tx. (ADR-068)
 
 This convention is the substrate's load-bearing pattern — every write everywhere in kontor + companions exposes it.
+
+**A builder is a function of its inputs — `kontor.clock` is the one place the kernel asks the time (ADR-171).** Nine `*-tx-data` builders defaulted a timestamp by reading the wall clock inside the builder, so they returned *different tx-data for identical inputs*. `kontor.book/entry-tx-data` — whose docstring promised purity — differed in `:kontor.transaction/posted-at` and in `:kontor.posting/posted-at` on every leg between two calls 25ms apart. The failure was invisible in the ordinary way: the tx-data is still well-formed, still balances, still transacts, and differs only *between* calls; every existing builder test called its builder once, so none of them could see it. The offenders spanned six clusters — `post-transaction-tx-data`, `reverse-tx-data`, `create-doc-tx-data`, `reclassify-privilege-tx-data`, `cross-tx-intent-tx-data`, `reconcile-lines-tx-data`, and the payment-application trio — so fixing only the reported one would have left the ADR-068 contract broken nearly everywhere it mattered.
+
+Every such default now comes from `kontor.clock/now`, which returns the dynamic `*now*` if bound and the wall clock otherwise. Unbound behaviour is byte-identical to before, which is what keeps this non-breaking: a consumer who never heard of `kontor.clock` must keep getting real timestamps, or the change would silently backdate every existing book. Bound, the whole kernel write path becomes reproducible — which is what a historical import (stamp the instant being replayed, not the instant the importer runs), a `kontor.process` replay, and a golden-tx-data assertion each need. The contract is pinned two ways: a reproduction test that fails on the pre-ADR-171 tree, and a source scan asserting no kernel `*-tx-data` builder contains a no-arg clock read — which holds for builders nobody has written yet, as a per-builder fixture cannot.
+
+Scope is deliberate. The read-side defaults in `kontor.reporting.*` (`as-of-tx` / `as-of-valid` defaulting to now) are untouched: they change what a caller *sees*, never what is stored, and each already carries its own private `now`. Companion modules are untouched. Both are follow-ups, not oversights. One sharp edge: `*now*` is a dynamic var, so it crosses `future` / `send` / `pmap` but not a raw `Thread` or a bare executor `submit` — code dispatching to its own pool must re-establish the binding or capture `(now)` first. Nothing in the kernel does this today.
 
 ### 5.4 `kontor.book` verb facade
 

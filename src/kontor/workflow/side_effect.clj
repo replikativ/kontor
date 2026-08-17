@@ -12,6 +12,7 @@
    Side-effect EXECUTORS (email senders, EDI clients, etc.) are
    consumer-side."
   (:require [datahike.api :as d]
+            [kontor.clock :as clock]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -80,7 +81,7 @@
   (validation/transact-with-validation
    conn [{:db/id intent-eid
           :kontor.side-effect-intent/status :processing
-          :kontor.side-effect-intent/processing-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/processing-at (clock/now)}]))
 
 (defn mark-done!
   "Transition :processing → :done. Worker calls this after the side
@@ -89,7 +90,7 @@
   (validation/transact-with-validation
    conn [{:db/id intent-eid
           :kontor.side-effect-intent/status :done
-          :kontor.side-effect-intent/processed-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/processed-at (clock/now)}]))
 
 (defn mark-failed!
   "Transition :processing → :failed with error message + retry-count
@@ -108,7 +109,7 @@
             :kontor.side-effect-intent/status (if terminal? :abandoned :failed)
             :kontor.side-effect-intent/retry-count retry
             :kontor.side-effect-intent/last-error (or error-message "(no message)")
-            :kontor.side-effect-intent/processed-at (java.util.Date.)}])))
+            :kontor.side-effect-intent/processed-at (clock/now)}])))
 
 (defn mark-abandoned!
   "Force-abandon an intent (no more retries). Use when an error is
@@ -118,4 +119,4 @@
    conn [{:db/id intent-eid
           :kontor.side-effect-intent/status :abandoned
           :kontor.side-effect-intent/last-error reason-string
-          :kontor.side-effect-intent/processed-at (java.util.Date.)}]))
+          :kontor.side-effect-intent/processed-at (clock/now)}]))

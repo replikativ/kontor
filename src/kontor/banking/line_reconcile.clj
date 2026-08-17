@@ -24,6 +24,7 @@
    residual/matching annotations are added. (`:amount-residual` is absent until
    first reconciled; readers treat absent as \"the full amount is open\".)"
   (:require [datahike.api :as d]
+            [kontor.clock :as clock]
             [kontor.validation :as validation]))
 
 ;; ============================================================================
@@ -143,7 +144,7 @@
                             {:type :line-reconcile/mixed-commodity
                              :commodities commodities})))
         commodity (first commodities)
-        matched-at (or matched-at (java.util.Date.))
+        matched-at (or matched-at (clock/now))
         debits  (->> lines (filter #(pos? (.signum ^java.math.BigDecimal (:residual %))))
                      (sort-by :eid) vec)
         credits (->> lines (filter #(neg? (.signum ^java.math.BigDecimal (:residual %))))

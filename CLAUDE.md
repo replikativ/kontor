@@ -199,6 +199,13 @@ src/kontor/    kernel (clustered by domain)
   schema.clj                schema EDN (kernel attrs across ~30 namespaces)
   core.clj                  create-test-db + install-schema! + provider registration
   money.clj                 Money + arithmetic (ADR-013) — substrate
+  clock.cljc                the one place the kernel asks the time (ADR-171).
+                            `*-tx-data` builders default timestamps from
+                            `clock/now`, never a direct `(java.util.Date.)`,
+                            so a builder stays a function of its inputs. Bind
+                            `clock/*now*` to make the whole write path
+                            reproducible. Read-side `as-of-*` defaults in
+                            `kontor.reporting.*` are deliberately excluded.
   bitemporal.clj            :tx/valid-from + resolver + close-validity (ADR-048)
   entity.clj                :entity helpers + family walk (ADR-031)
   gate.clj                  transact-with-validation entry point + registry (T-2 note 160)

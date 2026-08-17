@@ -40,6 +40,7 @@
    existing callers keep their semantics."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.clock :as clock]
             [kontor.fx.fx :as fx]
             [kontor.money :as money]
             [kontor.posting :as posting]
@@ -254,7 +255,7 @@
    Returns the tx-report."
   [conn opts]
   (let [{:keys [vt-from vt-to applied-at]} opts
-        applied-at (or applied-at (java.util.Date.))
+        applied-at (or applied-at (clock/now))
         tx-data (apply-payment-tx-data
                  (d/db conn) (assoc opts :applied-at applied-at))
         effective-vt-from (or vt-from applied-at)
@@ -310,7 +311,7 @@
                              :payment-commodity pay-symbol
                              :invoice           invoice-eid})))
         current-status (:kontor.invoice/status inv)
-        applied-at (or applied-at (java.util.Date.))
+        applied-at (or applied-at (clock/now))
         app-tempid (str "pay-app" tempid-suffix)
         app-row (cond-> {:db/id app-tempid
                          :kontor.payment-application/payment payment
@@ -479,7 +480,7 @@
         inv-currency (:kontor.invoice/currency inv)
         inv-comm     (commodity-eid-by-symbol db inv-currency)
         pay-symbol   (commodity-symbol db commodity)
-        settle-date  (or effective-date (java.util.Date.))
+        settle-date  (or effective-date (clock/now))
         cross?       (and inv-currency pay-symbol (not= inv-currency pay-symbol))
         ;; How much of the open item this clears, in the INVOICE currency.
         settles      (or settles
@@ -590,7 +591,7 @@
 
    See [[settle-invoice-tx-data]] for the options."
   [conn opts]
-  (let [settle-date (or (:effective-date opts) (java.util.Date.))
+  (let [settle-date (or (:effective-date opts) (clock/now))
         tx-data (settle-invoice-tx-data (d/db conn)
                                         (assoc opts :effective-date settle-date))]
     (validation/transact-with-validation
@@ -620,7 +621,7 @@
                       (kontor.bitemporal). Default: `:applied-at`.
      :vt-to           instant — optional upper bound."
   [conn {:keys [vt-from vt-to applied-at] :as opts}]
-  (let [applied-at (or applied-at (java.util.Date.))
+  (let [applied-at (or applied-at (clock/now))
         opts (assoc opts :applied-at applied-at)
         tx-data (reverse-application-tx-data (d/db conn) opts)
         effective-vt-from (or vt-from applied-at)
@@ -649,7 +650,7 @@
         current-status (get-in original [:kontor.payment-application/invoice :kontor.invoice/status])
         original-amount (:kontor.payment-application/amount original)
         negated (.negate ^java.math.BigDecimal original-amount)
-        applied-at (or applied-at (java.util.Date.))
+        applied-at (or applied-at (clock/now))
         rev-tempid (str "pay-app-rev" tempid-suffix)
         rev-row (cond-> {:db/id rev-tempid
                          :kontor.payment-application/payment
@@ -816,7 +817,7 @@
   (when-not commodity      (throw (ex-info ":commodity required" {})))
   (when-not applied-by-uid (throw (ex-info ":applied-by-uid required" {})))
   (let [db (d/db conn)
-        applied-at (or applied-at (java.util.Date.))
+        applied-at (or applied-at (clock/now))
         openers (open-invoices-for-partner db partner
                                            {:exclude-disputed? exclude-disputed?
                                             :as-of-valid applied-at

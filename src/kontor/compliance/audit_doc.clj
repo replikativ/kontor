@@ -26,6 +26,7 @@
    kernel ACL; the consumer's auth layer owns enforcement."
   (:require [datahike.api :as d]
             [kontor.bitemporal :as kbt]
+            [kontor.clock :as clock]
             [kontor.workflow.status-machine :as sm]
             [kontor.validation :as validation]))
 
@@ -126,7 +127,7 @@
             :kontor.audit-doc/code code
             :kontor.audit-doc/type type
             :kontor.audit-doc/storage-uri storage-uri
-            :kontor.audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
+            :kontor.audit-doc/uploaded-at (or uploaded-at (clock/now))}
      title           (assoc :kontor.audit-doc/title title)
      description     (assoc :kontor.audit-doc/description description)
      content-hash    (assoc :kontor.audit-doc/content-hash content-hash)
@@ -309,7 +310,7 @@
                      waivers — the waiver/classification memo)
      :vt-from / :vt-to  valid-time bounds (default :vt-from = now)"
   [conn {:keys [vt-from vt-to] :as opts}]
-  (let [now (java.util.Date.)]
+  (let [now (clock/now)]
     (validation/transact-with-validation
      conn (kbt/with-vt (reclassify-privilege-tx-data
                         (d/db conn) (assoc opts :changed-at now))
@@ -335,7 +336,7 @@
               :facet :kontor.audit-doc/privilege
               :from from
               :to to
-              :changed-at (or changed-at (java.util.Date.))
+              :changed-at (or changed-at (clock/now))
               :changed-by-uid changed-by-uid
               :reason reason}
        reason-note    (assoc :reason-note reason-note)

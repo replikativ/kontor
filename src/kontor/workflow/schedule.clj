@@ -27,6 +27,7 @@
      3. The composite identity `[schedule, sequence]` makes
         re-firing idempotent."
   (:require [datahike.api :as d]
+            [kontor.clock :as clock]
             [kontor.validation :as validation])
   (:import [java.time LocalDate ZoneOffset]
            [java.time.temporal ChronoUnit]))
@@ -203,7 +204,7 @@
    `record-occurrence-tx-data` (ADR-067)."
   ([conn schedule sequence scheduled-date amount commodity tx-data]
    (record-occurrence! conn schedule sequence scheduled-date amount
-                       commodity tx-data (java.util.Date.)))
+                       commodity tx-data (clock/now)))
   ([conn schedule sequence scheduled-date amount commodity tx-data fired-at]
    ;; note 198 WF-B: the `[schedule, sequence]` composite identity collapses the
    ;; OCCURRENCE row, but `tx-data` carries its own tempids — so a re-fire used

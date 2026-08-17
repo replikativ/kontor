@@ -86,6 +86,7 @@
   (:require [clojure.edn :as edn]
             [clojure.string :as str]
             [datahike.api :as d]
+            [kontor.clock :as clock]
             [kontor.workflow.side-effect :as se]
             [kontor.validation :as validation])
   (:import [java.nio.charset StandardCharsets]
@@ -184,7 +185,7 @@
              :kontor.side-effect-intent/type        :cross-tx-post
              :kontor.side-effect-intent/payload     payload
              :kontor.side-effect-intent/status      :pending
-             :kontor.side-effect-intent/created-at  (java.util.Date.)
+             :kontor.side-effect-intent/created-at  (clock/now)
              :kontor.side-effect-intent/retry-count 0
              :kontor.side-effect-intent/max-retries max-retries}
       source-history-eid

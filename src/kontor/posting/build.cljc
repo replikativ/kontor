@@ -7,6 +7,7 @@
    `post-transaction!` stay in `kontor.posting`, which re-exports these two."
   (:require [kontor.actor.ref :as actor]
             [kontor.bitemporal :as kbt]
+            [kontor.clock :as clock]
             [kontor.posting.validate :as pv]))
 
 (defn build-transaction
@@ -102,8 +103,15 @@
    `build-transaction`, and applies `kbt/with-vt` (vt-from defaults
    to `:kontor.transaction/effective-date`).
 
+   The `:posted-at` default comes from `kontor.clock/now`, not from a direct
+   wall-clock read. That is what lets this stay a *pure* builder in the sense
+   ADR-068 means: bind `kontor.clock/*now*` and identical inputs give
+   identical tx-data. Reading the clock here directly made
+   `kontor.book/entry-tx-data` -- documented as pure -- return transactions
+   that differed in `:posted-at` between two calls milliseconds apart.
+
    Opts:
-     :posted-at — sealing timestamp (default now)
+     :posted-at — sealing timestamp (default `kontor.clock/now`)
      :vt-from / :vt-to — valid-time window
      :actor     — WHO sealed this entry (ADR-150). Accepts an eid, a
                   lookup-ref, or the bare `:kontor.actor/uid` string;
@@ -117,7 +125,7 @@
                   `kontor.actor/require-actor-on-posted!`."
   ([input] (post-transaction-tx-data input {}))
   ([input {:keys [posted-at vt-from vt-to actor]}]
-   (let [pa (or posted-at #?(:clj (java.util.Date.) :cljs (js/Date.)))
+   (let [pa (or posted-at (clock/now))
          input' (-> input
                     (assoc-in [:transaction :kontor.transaction/state] :posted)
                     (assoc-in [:transaction :kontor.transaction/posted-at] pa)
