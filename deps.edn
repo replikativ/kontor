@@ -76,7 +76,10 @@
   ;; 0.4.317), so the browser lane needs NO datahike/fress worktree — it runs on
   ;; this same published artifact (see the :cljs alias). Carries forward the planner
   ;; scope-leak fixes (#883) kontor's invariants + report queries depend on.
-  org.replikativ/datahike          {:mvn/version "0.8.1744"}
+  ;; Pending Datahike PR #1051: writer reports retain interpreted operation
+  ;; kinds so governed consumers can reserve whole-history audits for purge.
+  org.replikativ/datahike          {:git/url "https://github.com/replikativ/datahike.git"
+                                    :git/sha "31264ee35ecdd3f2e36ed9a42c3df7c7a31dab5b"}
   ;; ADR-011's declarative datalog invariants now live inline at
   ;; `kontor.invariant` (vendored from datopia/invariant, MIT, maintained
   ;; by us). Single-dep posture per ADR-001 preserved.

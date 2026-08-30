@@ -5354,6 +5354,26 @@
 ;; Aggregate
 ;; ============================================================================
 
+(def resource
+  "Minimal cohabiting schema for conserved resource authority.
+
+   This is intentionally the ordinary Kontor posting spine rather than a
+   parallel budget model. Applications such as Dvergr can install it into an
+   existing room database without importing the full accounting kernel."
+  (vec
+   (concat
+    audit-attrs
+    actor-attrs
+    commodity-attrs
+    account-attrs
+    journal-attrs
+    transaction-attrs
+    posting-attrs
+    ledger-attrs
+    posting-ledger-attrs
+    resource-account-attrs
+    resource-transfer-attrs)))
+
 (def all
   "Full kernel schema as one transactable vector. Order matters where
    refs are involved — but datahike resolves refs by ident so within

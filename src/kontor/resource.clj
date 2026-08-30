@@ -9,9 +9,14 @@
   (:require [datahike.api :as d]
             [kontor.actor :as actor]
             [kontor.gate :as gate]
+            [kontor.governance :as governance]
             [kontor.money :as money]
             [kontor.posting.build :as posting-build]
-            [kontor.resource.validate :as validate])
+            [kontor.resource.validate :as validate]
+            [kontor.schema :as schema]
+            ;; Registers the composed in-transaction gate for direct resource
+            ;; consumers that deliberately do not require `kontor.core`.
+            [kontor.validation])
   (:import [java.util Date UUID]))
 
 (def resource-ledger
@@ -63,6 +68,19 @@
   "Install the resource ledger, journal, and balanced source/sink accounts."
   [conn]
   (d/transact conn default-seeds)
+  conn)
+
+(defn install!
+  "Install the minimal resource/posting schema and mandatory writer governor.
+
+   Intended for cohabiting application databases. The full accounting kernel
+   remains available through `kontor.core/install-schema!`; resource-only
+   consumers should use this entry point so both the gate and Datahike smart
+   contract are active before authority is issued."
+  [conn]
+  (d/transact conn schema/resource)
+  (governance/govern! conn)
+  (install-defaults! conn)
   conn)
 
 (defn install-unit!

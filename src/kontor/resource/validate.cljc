@@ -18,6 +18,10 @@
   #{:db.purge/attribute :db/retract :db/retractAttribute
     :db.fn/retractAttribute})
 
+(def ^:private history-purge-ops
+  #{:db/purge :db.purge/entity :db.purge/attribute
+    :db.history.purge/before})
+
 (defn- resolve-eid
   [db ref]
   ;; Negative numbers and strings are tx-local tempids, never existing
@@ -71,8 +75,65 @@
           (d/q '[:find ?e ?a ?v ?tx
                  :in $ [?e ...]
                  :where [?e ?a ?v ?tx]]
-               db eids))
+               (if (get-in db [:config :keep-history?])
+                 (d/history db)
+                 db)
+               eids))
     #{}))
+
+(defn- entity-has-attr?
+  [db eid attr]
+  (boolean
+   (d/q '[:find ?e .
+          :in $ ?e ?attr
+          :where [?e ?attr _]]
+        db eid attr)))
+
+(defn- resource-installed?
+  [db]
+  (boolean
+   (d/q '[:find ?e .
+          :where [?e :kontor.resource-account/id]] db)))
+
+(defn- resource-protected-eid?
+  "Delta-local membership test for one retracted entity.
+
+   Purges use [[resource-protected-eids]] plus a full history comparison. For
+   ordinary reports this predicate keeps cost proportional to the retracted
+   delta instead of enumerating all prior transfers and postings."
+  [db eid]
+  (or (entity-has-attr? db eid :kontor.resource-account/id)
+      (entity-has-attr? db eid :kontor.resource-transfer/id)
+      (boolean
+       (d/q '[:find ?posting .
+              :in $ ?posting
+              :where
+              [?posting :kontor.posting/transaction ?tx]
+              [?tx :kontor.resource-transfer/id]] db eid))
+      (boolean
+       (d/q '[:find ?posting .
+              :in $ ?referenced
+              :where
+              [?posting :kontor.posting/transaction ?tx]
+              [?tx :kontor.resource-transfer/id]
+              (or [?posting :kontor.posting/commodity ?referenced]
+                  [?posting :kontor.posting/ledger ?referenced])]
+            db eid))
+      (boolean
+       (d/q '[:find ?tx .
+              :in $ ?journal
+              :where
+              [?tx :kontor.resource-transfer/id]
+              [?tx :kontor.transaction/journal ?journal]] db eid))
+      (and (resource-installed? db)
+           (or (= resource-ledger-code
+                  (d/q '[:find ?code .
+                         :in $ ?e
+                         :where [?e :kontor.ledger/code ?code]] db eid))
+               (= "RESOURCE"
+                  (d/q '[:find ?code .
+                         :in $ ?e
+                         :where [?e :kontor.journal/code ?code]] db eid))))))
 
 (defn immutable-history-violations
   "Established resource facts present before but absent after a write.
@@ -81,12 +142,23 @@
    original operation or the purged datoms. Comparing facts—including their
    originating transaction id—is therefore the authoritative writer-side
    backstop and also catches purge-and-recreate attempts."
-  [{:keys [db-before db-after]}]
-  (let [eids (resource-protected-eids db-before)]
+  [{:keys [db-before db-after tx-data tx-ops]}]
+  (if (or (nil? tx-ops) (some history-purge-ops tx-ops))
+    ;; Reports from older Datahike releases have no operation provenance, so
+    ;; retain the conservative full audit for compatibility. With :tx-ops this
+    ;; path is reserved for operations whose history loss has no datom delta.
+    (let [eids (resource-protected-eids db-before)]
+      (into []
+            (map (fn [[e a v tx]] {:entity e :attribute a :value v :tx tx}))
+            (set/difference (resource-facts db-before eids)
+                            (resource-facts db-after eids))))
     (into []
-          (map (fn [[e a v tx]] {:entity e :attribute a :value v :tx tx}))
-          (set/difference (resource-facts db-before eids)
-                          (resource-facts db-after eids)))))
+          (comp (filter #(false? (:added %)))
+                (filter #(resource-protected-eid? db-before (:e %)))
+                (map (fn [datom]
+                       {:entity (:e datom) :attribute (:a datom)
+                        :value (:v datom) :tx (:tx datom)})))
+          tx-data)))
 
 (defn- unique-identity-attrs
   [db]
@@ -108,6 +180,10 @@
 (defn- ref-attr?
   [db attr]
   (= :db.type/ref (:db/valueType (get (d/schema db) attr))))
+
+(defn- cardinality-many?
+  [db attr]
+  (= :db.cardinality/many (:db/cardinality (get (d/schema db) attr))))
 
 (defn- comparable-value
   [db attr value]
@@ -145,30 +221,32 @@
           (mapcat
            (fn [form]
              (cond
-               (and (vector? form)
+               (and (sequential? form)
                     (whole-entity-destructive-ops (first form))
                     (or (protected? (second form))
                         (referenced-by-protected? (second form))))
                [{:tx form :entity (resolve-eid db (second form))
                  :operation (first form)}]
 
-               (and (vector? form)
+               (and (sequential? form)
                     (attribute-destructive-ops (first form))
                     (protected? (second form)))
                [{:tx form :entity (resolve-eid db (second form))
                  :operation (first form) :attribute (nth form 2 nil)}]
 
-               (and (vector? form) (= :db/add (first form))
+               (and (sequential? form) (= :db/add (first form))
                     (protected? (second form)))
                (let [[_ target attr value] form
                      eid (resolve-eid db target)
                      current (current-values db eid attr)
                      value (comparable-value db attr value)]
-                 (when (and (seq current) (not (contains? current value)))
+                 (when (and (not (cardinality-many? db attr))
+                            (seq current)
+                            (not (contains? current value)))
                    [{:tx form :entity eid :attribute attr
                      :old current :new value}]))
 
-               (and (vector? form) (= :db/cas (first form))
+               (and (sequential? form) (= :db/cas (first form))
                     (protected? (second form)))
                (let [[_ target attr old new] form
                      eid (resolve-eid db target)
@@ -183,10 +261,16 @@
                  (when (contains? protected eid)
                    (keep (fn [[attr value]]
                            (when (not= :db/id attr)
-                             (let [current (current-values db eid attr)
-                                   value (comparable-value db attr value)]
-                               (when (and (seq current)
-                                          (not (contains? current value)))
+                             (let [many? (cardinality-many? db attr)
+                                   current (current-values db eid attr)
+                                   values (if (and many? (sequential? value))
+                                            value
+                                            [value])]
+                               (when (and (or (not many?) (some nil? values))
+                                          (seq current)
+                                          (some #(not (contains? current
+                                                                 (comparable-value db attr %)))
+                                                values))
                                  {:tx form :entity eid :attribute attr
                                   :old current :new value}))))
                          form)))
@@ -201,6 +285,77 @@
                     {:type :kontor.resource/immutable-history
                      :violations (vec violations)
                      :remediation "Record a compensating resource transfer."}))))
+
+(defn- identity-refs
+  [identity-attrs entity]
+  (into []
+        (keep (fn [[attr value]]
+                (when (and (identity-attrs attr) (some? value))
+                  [attr value])))
+        entity))
+
+(defn- identity-ref
+  [identity-attrs entity]
+  (first (identity-refs identity-attrs entity)))
+
+(defn- normalize-tx-entities
+  "Project entity maps and `:db/add` forms into a small assertion graph.
+
+   Keys remain transaction-local identities (tempids or lookup refs) when an
+   eid does not exist yet. `:aliases` makes an explicit tempid and a unique
+   identity asserted on the same entity interchangeable. This is intentionally
+   not a general Datahike transactor: resource validation needs only positive
+   assertions, while destructive forms are handled by the immutable gate."
+  [db tx-data]
+  (let [identities (unique-identity-attrs db)
+        entries
+        (keep-indexed
+         (fn [index form]
+           (cond
+             (map? form)
+             (let [identity (identity-ref identities form)
+                   identity-aliases (identity-refs identities form)
+                   key (or (resolve-eid db (:db/id form))
+                           (some-> identity (resolve-eid db))
+                           (:db/id form)
+                           identity
+                           [::anonymous index])]
+               {:key key :entity (dissoc form :db/id)
+                :aliases (cond-> (into #{key} identity-aliases)
+                           (:db/id form) (conj (:db/id form)))})
+
+             (and (sequential? form) (= :db/add (first form)))
+             (let [[_ target attr value] form
+                   key (or (resolve-eid db target) target)]
+               {:key key :entity {attr value} :aliases (hash-set key target)})
+
+             :else nil))
+         tx-data)
+        entities (reduce (fn [out {:keys [key entity]}]
+                           (update out key merge entity))
+                         {} entries)
+        aliases (reduce (fn [out {:keys [key aliases]}]
+                          (reduce #(assoc %1 %2 key) out aliases))
+                        {} entries)
+        ;; List-form identity assertions are only visible after the first
+        ;; merge, so add their lookup refs as a second-pass alias.
+        aliases (reduce-kv
+                 (fn [out key entity]
+                   (reduce #(assoc %1 %2 key)
+                           out (identity-refs identities entity)))
+                 aliases entities)]
+    {:entities entities :aliases aliases}))
+
+(defn- graph-key
+  [db aliases ref]
+  (or (resolve-eid db ref) (get aliases ref) ref))
+
+(defn- graph-attr
+  [db entities aliases ref attr]
+  (let [key (graph-key db aliases ref)]
+    (or (get-in entities [key attr])
+        (when (number? key)
+          (get (d/pull db [attr] key) attr)))))
 
 (defn- account-kind [db account]
   (d/q '[:find ?kind . :in $ ?a
@@ -396,23 +551,30 @@
    proposed posting delta to the durable wallet balances."
   [db tx-data]
   (assert-immutable-tx-data! db tx-data)
-  (let [transfers (filter #(and (map? %)
-                                (contains? % :kontor.resource-transfer/id))
-                          tx-data)
-        transfer-ids (into #{} (map :db/id) transfers)
+  (let [{:keys [entities aliases]} (normalize-tx-entities db tx-data)
+        transfers (into []
+                        (keep (fn [[key entity]]
+                                (when (contains? entity :kontor.resource-transfer/id)
+                                  (assoc entity ::key key))))
+                        entities)
+        postings (into []
+                       (keep (fn [[key entity]]
+                               (when (or (contains? entity :kontor.posting/transaction)
+                                         (contains? entity :kontor.posting/ledger))
+                                 (assoc entity ::key key))))
+                       entities)
+        transfer-keys (into #{} (map ::key) transfers)
         unreceipted
         (vec
-         (for [posting tx-data
-               :when (and (map? posting)
-                          (contains? posting :kontor.posting/ledger)
-                          (= resource-ledger-code
-                             (:kontor.ledger/code
-                              (d/pull db [:kontor.ledger/code]
-                                      (:kontor.posting/ledger posting))))
-                          (not (contains? transfer-ids
-                                          (:kontor.posting/transaction posting))))]
-           {:posting posting
-            :transaction (:kontor.posting/transaction posting)}))]
+         (for [posting postings
+               :let [ledger (:kontor.posting/ledger posting)
+                     transaction (:kontor.posting/transaction posting)]
+               :when (and (= resource-ledger-code
+                             (graph-attr db entities aliases ledger
+                                         :kontor.ledger/code))
+                          (not (contains? transfer-keys
+                                          (graph-key db aliases transaction))))]
+           {:posting (::key posting) :transaction transaction}))]
     (when (seq unreceipted)
       (throw (ex-info "Resource-ledger posting has no transfer receipt"
                       {:type :kontor.resource/unreceipted-posting
@@ -420,34 +582,33 @@
     (when (seq transfers)
       (let [resolve-account
             (fn [ref]
-              (let [pulled (d/pull db [:db/id :kontor.resource-account/kind] ref)]
-                {:id (:db/id pulled)
-                 :kind (:kontor.resource-account/kind pulled)}))
+              {:id (graph-key db aliases ref)
+               :kind (graph-attr db entities aliases ref
+                                 :kontor.resource-account/kind)})
             resolve-posting
             (fn [posting]
-              (let [account (resolve-eid db (:kontor.posting/account posting))
-                    commodity (resolve-eid db (:kontor.posting/commodity posting))
-                    ledger (resolve-eid db (:kontor.posting/ledger posting))]
+              (let [account (graph-key db aliases (:kontor.posting/account posting))
+                    commodity (graph-key db aliases (:kontor.posting/commodity posting))
+                    ledger (:kontor.posting/ledger posting)]
                 (assoc posting
                        ::account account
                        ::commodity commodity
                        ::ledger-code
-                       (:kontor.ledger/code
-                        (when ledger
-                          (d/pull db [:kontor.ledger/code] ledger))))))
+                       (graph-attr db entities aliases ledger
+                                   :kontor.ledger/code))))
             resolved
             (mapv
-             (fn [{:db/keys [id]
-                   :kontor.resource-transfer/keys [kind source destination]
+             (fn [{:kontor.resource-transfer/keys [kind source destination]
                    :kontor.transaction/keys [state posted-at journal]
                    :as transfer}]
-               (let [source      (resolve-account source)
+               (let [id          (::key transfer)
+                     source      (resolve-account source)
                      destination (resolve-account destination)
                      postings    (into []
-                                       (comp (filter #(and (map? %)
-                                                           (= id (:kontor.posting/transaction %))))
+                                       (comp (filter #(= id (graph-key db aliases
+                                                                       (:kontor.posting/transaction %))))
                                              (map resolve-posting))
-                                       tx-data)
+                                       postings)
                      by-resource (group-by ::commodity postings)
                      topology-ok? (case kind
                                     :mint    (and (= :source (:kind source))
@@ -462,8 +623,8 @@
                      entry-ok? (and (= :posted state)
                                     posted-at
                                     (= "RESOURCE"
-                                       (:kontor.journal/code
-                                        (d/pull db [:kontor.journal/code] journal)))
+                                       (graph-attr db entities aliases journal
+                                                   :kontor.journal/code))
                                     (every? :kontor.posting/posted-at postings))
                      shape-ok?
                      (and (:id source) (:id destination)
@@ -489,7 +650,12 @@
                  (when-not shape-ok?
                    (throw (ex-info "Invalid conserved resource transfer"
                                    {:type :kontor.resource/invalid-transfer
-                                    :transfer transfer})))
+                                    :transfer transfer
+                                    :source source
+                                    :destination destination
+                                    :postings postings
+                                    :topology-ok? topology-ok?
+                                    :entry-ok? entry-ok?})))
                  {:source source :destination destination :postings postings}))
              transfers)
             wallet-deltas
@@ -513,7 +679,9 @@
             (vec
              (for [[wallet deltas] wallet-deltas
                    [commodity delta] deltas
-                   :let [prior (get (wallet-balances db wallet)
+                   :let [prior (get (if (number? wallet)
+                                      (wallet-balances db wallet)
+                                      {})
                                     commodity
                                     (money/zero-amount))
                          after (money/add-amount prior delta)]

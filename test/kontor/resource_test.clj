@@ -24,6 +24,17 @@
 (defn- setup []
   (setup-on (core/create-test-db)))
 
+(defn- maps->add-forms
+  [tx-data]
+  (mapcat (fn [form]
+            (if (map? form)
+              (let [eid (:db/id form)]
+                (map (fn [[attr value]]
+                       (list :db/add eid attr value))
+                     (dissoc form :db/id)))
+              [form]))
+          tx-data))
+
 (deftest vector-transfer-is-an-ordinary-balanced-kontor-entry
   (let [{:keys [parent child]} (setup)
         tx-data (resource/transfer-tx-data
@@ -339,6 +350,7 @@
                          :kontor.resource-account/kind :wallet}]]]
         (is (some? (governor-error conn tx-data))))
       (let [report (dc/with @conn [[:db/purge mint-tx]])]
+        (is (contains? (:tx-ops report) :db/purge))
         (is (seq (resource-validate/immutable-history-violations report)))
         (is (= :kontor.resource/immutable-history
                (:type (ex-data
@@ -371,6 +383,35 @@
                         (catch Throwable error error)))))))
       (is (= {} (resource/balance conn (resource/account-ref parent))))
       (is (= {unit 100M} (resource/balance conn (resource/account-ref child)))))))
+
+(deftest ordinary-writes-do-not-scan-all-resource-history
+  (let [{:keys [conn]} (setup)
+        report (dc/with @conn [{:kontor.actor/uid "unrelated-room-actor"}])
+        resource-facts-var (ns-resolve 'kontor.resource.validate
+                                       'resource-facts)
+        scans (atom 0)]
+    (is (contains? (:tx-ops report) :db/add))
+    (with-redefs-fn
+      {resource-facts-var (fn [& _]
+                            (swap! scans inc)
+                            (throw (ex-info "unexpected full scan" {})))}
+      #(is (nil? (governance/validate-report report))))
+    (is (zero? @scans))))
+
+(deftest purge-expanded-from-a-transaction-function-triggers-history-audit
+  (let [{:keys [conn parent]} (setup-on
+                               (core/create-test-db {:keep-history? true}))
+        mint-id (random-uuid)]
+    (resource/mint! conn {:id mint-id
+                          :destination (resource/account-ref parent)
+                          :resources {unit 1M}})
+    (let [tx (:transaction (resource/receipt conn mint-id))
+          report (dc/with @conn
+                          [[:db.fn/call
+                            (fn [_] [[:db/purge tx]])]])]
+      (is (contains? (:tx-ops report) :db.fn/call))
+      (is (contains? (:tx-ops report) :db/purge))
+      (is (seq (resource-validate/immutable-history-violations report))))))
 
 (deftest ordinary-financial-accounts-do-not-acquire-a-no-overdraft-policy
   (let [conn (core/create-test-db)]
@@ -410,3 +451,106 @@
     (is (nil? (governance/validate-report
                (dc/with @conn [{:kontor.journal/code "RESOURCE"
                                 :kontor.journal/name "Renamed"}]))))))
+
+(deftest protected-resources-accept-append-only-cardinality-many-metadata
+  (let [{:keys [conn]} (setup)]
+    (d/transact conn [{:db/ident :consumer.resource/tags
+                       :db/valueType :db.type/keyword
+                       :db/cardinality :db.cardinality/many}])
+    (d/transact conn [[:db/add resource/source-account
+                       :consumer.resource/tags :alpha]])
+    (let [candidate [[:db/add resource/source-account
+                      :consumer.resource/tags :beta]]]
+      (is (empty? (resource-validate/immutable-tx-data-violations
+                   @conn candidate)))
+      (is (nil? (governance/validate-report (dc/with @conn candidate))))
+      (gate/transact-with-validation conn candidate)
+      (is (= #{:alpha :beta}
+             (set (:consumer.resource/tags
+                   (d/pull @conn [:consumer.resource/tags]
+                           resource/source-account))))))))
+
+(deftest sequential-operation-forms-cannot-bypass-resource-validation
+  (let [{:keys [conn parent child]} (setup)
+        mint-id (random-uuid)]
+    (resource/mint! conn {:id mint-id
+                          :destination (resource/account-ref parent)
+                          :resources {unit 10M}})
+    (let [tx (:transaction (resource/receipt conn mint-id))]
+      (is (seq (resource-validate/immutable-tx-data-violations
+                @conn [(list :db/add tx
+                             :kontor.resource-transfer/kind :grant)])))
+      (is (= :kontor.resource/immutable-history
+             (:type (ex-data
+                     (deepest-cause
+                      (try
+                        (gate/transact-with-validation
+                         conn [(list :db/add tx
+                                     :kontor.resource-transfer/kind :grant)])
+                        nil
+                        (catch Throwable error error))))))))
+    (let [unreceipted (-> (resource/transfer-tx-data
+                           {:id (random-uuid)
+                            :kind :grant
+                            :source (resource/account-ref parent)
+                            :destination (resource/account-ref child)
+                            :resources {unit 1M}
+                            :effective-date #inst "2026-08-30"})
+                          strip-resource-receipt
+                          maps->add-forms)]
+      (is (= :kontor.resource/unreceipted-posting
+             (:type (ex-data
+                     (deepest-cause
+                      (try
+                        (gate/transact-with-validation conn unreceipted)
+                        nil
+                        (catch Throwable error error))))))))))
+
+(deftest opening-a-child-wallet-and-granting-it-compose-atomically
+  (let [{:keys [conn parent]} (setup)
+        child (random-uuid)]
+    (resource/mint! conn {:id (random-uuid)
+                          :destination (resource/account-ref parent)
+                          :resources {unit 10M}})
+    (let [tx-data (concat
+                   (resource/open-account-tx-data {:id child :name "atomic child"})
+                   (resource/transfer-tx-data
+                    {:id (random-uuid)
+                     :kind :grant
+                     :source (resource/account-ref parent)
+                     :destination (resource/account-ref child)
+                     :resources {unit 4M}
+                     :effective-date #inst "2026-08-30"}))]
+      (gate/transact-with-validation conn tx-data)
+      (is (= {unit 6M}
+             (resource/balance conn (resource/account-ref parent))))
+      (is (= {unit 4M}
+             (resource/balance conn (resource/account-ref child)))))))
+
+(deftest resource-kernel-installs-standalone-in-a-cohabiting-store
+  (let [cfg (-> core/default-config
+                (assoc-in [:store :id] (random-uuid)))
+        parent (random-uuid)
+        child (random-uuid)]
+    (d/create-database cfg)
+    (let [conn (d/connect cfg)]
+      (try
+        (resource/install! conn)
+        (resource/install-unit! conn {:symbol unit :precision 0})
+        (resource/open-account! conn {:id parent})
+        (resource/open-account! conn {:id child})
+        (resource/mint! conn {:id (random-uuid)
+                              :destination (resource/account-ref parent)
+                              :resources {unit 3M}})
+        (resource/allocate! conn {:id (random-uuid)
+                                  :source (resource/account-ref parent)
+                                  :destination (resource/account-ref child)
+                                  :resources {unit 2M}})
+        (is (= {unit 1M}
+               (resource/balance conn (resource/account-ref parent))))
+        (is (= {unit 2M}
+               (resource/balance conn (resource/account-ref child))))
+        (finally
+          (governance/ungovern! conn)
+          (d/release conn)
+          (d/delete-database cfg))))))
