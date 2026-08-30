@@ -26,6 +26,16 @@
 (defn- setup []
   (setup-on (core/create-test-db)))
 
+(defn- setup-governed []
+  ;; Governors are keyed by store, so registering one on the shared copy-on-
+  ;; write test template would also govern unrelated branches in this JVM.
+  ;; Mandatory-writer tests instead use a fresh store with its own registry
+  ;; entry, matching an independently governed production database.
+  (let [conn (core/create-test-db
+              (assoc-in core/default-config [:store :id] (random-uuid)))]
+    (governance/govern! conn)
+    (setup-on conn)))
+
 (defn- maps->add-forms
   [tx-data]
   (mapcat (fn [form]
@@ -273,6 +283,112 @@
     (if-let [cause (ex-cause error)]
       (recur cause)
       error)))
+
+(defn- raw-outcome
+  [conn tx-data]
+  (try
+    (d/transact conn tx-data)
+    :committed
+    (catch Throwable error
+      (or (:type (ex-data (deepest-cause error))) :rejected))))
+
+(defn- tx-and-postings
+  [tx-data]
+  [(first (filter :kontor.transaction/external-id tx-data))
+   (vec (filter :kontor.posting/transaction tx-data))])
+
+(deftest unrelated-bulk-writes-skip-resource-graph-queries
+  (let [touched-postings (var-get
+                          (ns-resolve 'kontor.resource.validate
+                                      'touched-postings))
+        report {:db-after nil
+                :tx-data (mapv (fn [eid]
+                                 {:e eid :a :consumer.item/value
+                                  :v eid :added true})
+                               (range 1000))}]
+    (with-redefs [d/q (fn [& _]
+                        (throw (ex-info "Unexpected resource graph query" {})))]
+      (is (empty? (touched-postings report))))))
+
+(deftest staged-postings-cannot-mint-unreceipted-resource-authority
+  (let [{:keys [conn parent]} (setup-governed)
+        [transaction postings]
+        (tx-and-postings
+         (resource/transfer-tx-data
+          {:id (random-uuid) :kind :mint
+           :source resource/source-account
+           :destination (resource/account-ref parent)
+           :resources {unit 7M}
+           :effective-date #inst "2026-08-30"}))
+        tx-report (d/transact conn [(apply dissoc transaction
+                                           [:kontor.resource-transfer/id
+                                            :kontor.resource-transfer/kind
+                                            :kontor.resource-transfer/source
+                                            :kontor.resource-transfer/destination])])
+        transaction-eid (get (:tempids tx-report) (:db/id transaction))
+        skeleton-report
+        (d/transact conn
+                    (mapv (fn [posting]
+                            {:db/id (:db/id posting)
+                             :kontor.posting/transaction transaction-eid})
+                          postings))
+        completion
+        (mapv (fn [posting]
+                (-> posting
+                    (assoc :db/id (get (:tempids skeleton-report)
+                                       (:db/id posting)))
+                    (dissoc :kontor.posting/transaction)))
+              postings)]
+    ;; An ordinary posted transaction and skeletal postings may be prepared
+    ;; independently. Completing those postings in the reserved ledger must
+    ;; still traverse the mandatory writer contract and require a receipt.
+    (is (= :kontor.resource/unreceipted-posting
+           (raw-outcome conn completion)))
+    (is (= {} (resource/balance conn (resource/account-ref parent))))))
+
+(deftest staged-transfer-cannot-bypass-wallet-overdraft
+  (let [{:keys [conn parent child]} (setup-governed)
+        [transaction postings]
+        (tx-and-postings
+         (resource/transfer-tx-data
+          {:id (random-uuid) :kind :grant
+           :source (resource/account-ref parent)
+           :destination (resource/account-ref child)
+           :resources {unit 9M}
+           :effective-date #inst "2026-08-30"}))
+        external-id (:kontor.transaction/external-id transaction)
+        _ (d/transact conn
+                      [{:kontor.transaction/external-id external-id}])
+        transaction-ref [:kontor.transaction/external-id external-id]
+        skeleton-report
+        (d/transact conn
+                    (mapv (fn [posting]
+                            {:db/id (:db/id posting)
+                             :kontor.posting/transaction transaction-ref
+                             :kontor.posting/account
+                             (:kontor.posting/account posting)})
+                          postings))
+        transaction-completion
+        (-> transaction
+            (assoc :db/id transaction-ref)
+            (dissoc :kontor.transaction/external-id))
+        posting-completions
+        (mapv (fn [posting]
+                (-> posting
+                    (assoc :db/id (get (:tempids skeleton-report)
+                                       (:db/id posting)))
+                    (dissoc :kontor.posting/transaction
+                            :kontor.posting/account)))
+              postings)]
+    ;; The debit accounts were linked in an earlier transaction. Adding the
+    ;; receipt and remaining posting semantics later must nevertheless check
+    ;; the complete post-state balance of every affected wallet.
+    (is (= :kontor.resource/insufficient
+           (raw-outcome conn
+                        (into [transaction-completion]
+                              posting-completions))))
+    (is (= {} (resource/balance conn (resource/account-ref parent))))
+    (is (= {} (resource/balance conn (resource/account-ref child))))))
 
 (deftest resource-ledger-cannot-be-written-without-a-transfer-receipt
   (let [{:keys [conn parent child]} (setup)

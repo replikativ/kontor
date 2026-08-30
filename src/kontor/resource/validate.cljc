@@ -468,40 +468,112 @@
             [?ledger :kontor.ledger/code ?code]]
           db posting)))
 
+(defn- touched-eids-with-attr-namespace
+  [tx-data namespaces]
+  (into #{}
+        (keep (fn [datom]
+                (when (contains? namespaces (namespace (:a datom)))
+                  (:e datom))))
+        tx-data))
+
+(defn- postings-referencing
+  [db targets attr]
+  (if (seq targets)
+    (into #{}
+          (d/q '[:find [?posting ...]
+                 :in $ [?target ...] ?attr
+                 :where
+                 [?posting ?attr ?target]
+                 [?posting :kontor.posting/transaction _]]
+               db targets attr))
+    #{}))
+
+(defn- postings-through-transaction-ref
+  [db targets attr]
+  (if (seq targets)
+    (into #{}
+          (d/q '[:find [?posting ...]
+                 :in $ [?target ...] ?attr
+                 :where
+                 [?transaction ?attr ?target]
+                 [?posting :kontor.posting/transaction ?transaction]]
+               db targets attr))
+    #{}))
+
+(defn- touched-postings
+  "Postings whose resolved meaning may have changed in this report.
+
+   Looking only for a newly-added transaction or account edge is unsound:
+   callers can stage those edges and add the ledger, amount, receipt, account
+   kind, or posted transaction facts later. Follow every touched entity
+   through the complete post-state graph instead. This remains delta-local;
+   each query is rooted in the report's touched entity ids."
+  [{:keys [db-after tx-data]}]
+  (let [postings (touched-eids-with-attr-namespace
+                  tx-data #{"kontor.posting"})
+        transactions (touched-eids-with-attr-namespace
+                      tx-data #{"kontor.transaction"
+                                "kontor.resource-transfer"})
+        accounts (touched-eids-with-attr-namespace
+                  tx-data #{"kontor.account" "kontor.resource-account"})
+        commodities (touched-eids-with-attr-namespace
+                     tx-data #{"kontor.commodity"})
+        ledgers (touched-eids-with-attr-namespace
+                 tx-data #{"kontor.ledger"})
+        journals (touched-eids-with-attr-namespace
+                  tx-data #{"kontor.journal"})]
+    (into postings
+          cat
+          [(postings-referencing db-after transactions
+                                 :kontor.posting/transaction)
+           (postings-referencing db-after accounts
+                                 :kontor.posting/account)
+           (postings-referencing db-after commodities
+                                 :kontor.posting/commodity)
+           (postings-referencing db-after ledgers
+                                 :kontor.posting/ledger)
+           (postings-through-transaction-ref
+            db-after journals :kontor.transaction/journal)
+           (postings-through-transaction-ref
+            db-after accounts :kontor.resource-transfer/source)
+           (postings-through-transaction-ref
+            db-after accounts :kontor.resource-transfer/destination)])))
+
+(defn- posting-transaction
+  [db posting]
+  (d/q '[:find ?transaction .
+         :in $ ?posting
+         :where [?posting :kontor.posting/transaction ?transaction]]
+       db posting))
+
+(defn- resource-transfer?
+  [db transaction]
+  (and transaction
+       (entity-has-attr? db transaction :kontor.resource-transfer/id)))
+
 (defn unreceipted-posting-violations
   "Resource-ledger postings added without a resource-transfer receipt.
 
    Without this closed boundary, a caller could issue authority using an
    ordinary balanced Kontor transaction and bypass the transfer topology."
-  [{:keys [db-after tx-data]}]
+  [{:keys [db-after] :as report}]
   (vec
-   (for [datom tx-data
-         :when (and (:added datom)
-                    (= :kontor.posting/transaction (:a datom))
-                    (resource-ledger-posting? db-after (:e datom)))
-         :let [tx (:v datom)]
-         :when (nil? (d/q '[:find ?id .
-                            :in $ ?tx
-                            :where [?tx :kontor.resource-transfer/id ?id]]
-                          db-after tx))]
-     {:posting (:e datom) :transaction tx})))
+   (for [posting (touched-postings report)
+         :when (resource-ledger-posting? db-after posting)
+         :let [transaction (posting-transaction db-after posting)]
+         :when (not (resource-transfer? db-after transaction))]
+     {:posting posting :transaction transaction})))
 
 (defn- touched-resource-transfers
-  [{:keys [db-after tx-data]}]
-  (into #{}
-        (keep (fn [datom]
-                (cond
-                  (and (:added datom)
-                       (= :kontor.resource-transfer/id (:a datom)))
-                  (:e datom)
-
-                  (and (:added datom)
-                       (= :kontor.posting/transaction (:a datom))
-                       (d/q '[:find ?id . :in $ ?tx
-                              :where [?tx :kontor.resource-transfer/id ?id]]
-                            db-after (:v datom)))
-                  (:v datom))))
-        tx-data))
+  [{:keys [db-after tx-data] :as report}]
+  (let [direct (into #{}
+                     (filter #(resource-transfer? db-after %))
+                     (touched-eids-with-attr-namespace
+                      tx-data #{"kontor.resource-transfer"}))]
+    (into direct
+          (comp (map #(posting-transaction db-after %))
+                (filter #(resource-transfer? db-after %)))
+          (touched-postings report))))
 
 (defn- transfer-shape-violation
   [db tx]
@@ -564,14 +636,17 @@
         (touched-resource-transfers report)))
 
 (defn- touched-wallets
-  [{:keys [db-after tx-data]}]
+  [{:keys [db-after] :as report}]
   (into #{}
-        (keep (fn [datom]
-                (when (and (:added datom)
-                           (= :kontor.posting/account (:a datom))
-                           (= :wallet (account-kind db-after (:v datom))))
-                  (:v datom))))
-        tx-data))
+        (keep (fn [posting]
+                (let [account (d/q '[:find ?account .
+                                     :in $ ?posting
+                                     :where
+                                     [?posting :kontor.posting/account ?account]]
+                                   db-after posting)]
+                  (when (= :wallet (account-kind db-after account))
+                    account))))
+        (touched-postings report)))
 
 (defn- wallet-balances
   [db wallet]
