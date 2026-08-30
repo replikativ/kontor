@@ -6,6 +6,7 @@
    source and destination, is balanced per commodity in the resource ledger,
    follows the account-kind topology, and cannot leave a wallet negative."
   (:require [clojure.set :as set]
+            [clojure.string :as str]
             [datahike.api :as d]
             [kontor.money :as money]))
 
@@ -95,6 +96,43 @@
    (d/q '[:find ?e .
           :where [?e :kontor.resource-account/id]] db)))
 
+(declare resource-protected-eid?)
+
+(defn- kontor-semantic-attr?
+  "Kontor-owned facts are part of a sealed resource entity's semantics.
+
+   Consumers may still append their own cardinality-many annotations (for
+   example UI tags), but extending an already receipted Kontor transaction,
+   posting, account, ledger, journal, or commodity would rewrite the meaning
+   of durable authority without replacing an existing datom."
+  [attr]
+  (and (keyword? attr)
+       (some-> (namespace attr) (str/starts-with? "kontor."))))
+
+(defn- established-transfer?
+  [db ref]
+  (when-let [eid (resolve-eid db ref)]
+    (entity-has-attr? db eid :kontor.resource-transfer/id)))
+
+(defn- semantic-append-violations
+  "New semantic facts attached to already sealed resource history.
+
+   The posting case is deliberately based on the transaction target: a fresh
+   posting has no identity in `db-before`, but linking it to an established
+   receipt would otherwise extend a prior mint/grant with new coordinates."
+  [db-before tx-data]
+  (into []
+        (keep (fn [datom]
+                (when (and (:added datom)
+                           (or (and (= :kontor.posting/transaction (:a datom))
+                                    (established-transfer? db-before (:v datom)))
+                               (and (kontor-semantic-attr? (:a datom))
+                                    (resource-protected-eid? db-before (:e datom)))))
+                  {:entity (:e datom) :attribute (:a datom)
+                   :value (:v datom) :tx (:tx datom)
+                   :operation :append-to-sealed-resource})))
+        tx-data))
+
 (defn- resource-protected-eid?
   "Delta-local membership test for one retracted entity.
 
@@ -143,22 +181,38 @@
    originating transaction id—is therefore the authoritative writer-side
    backstop and also catches purge-and-recreate attempts."
   [{:keys [db-before db-after tx-data tx-ops]}]
-  (if (or (nil? tx-ops) (some history-purge-ops tx-ops))
-    ;; Reports from older Datahike releases have no operation provenance, so
-    ;; retain the conservative full audit for compatibility. With :tx-ops this
-    ;; path is reserved for operations whose history loss has no datom delta.
-    (let [eids (resource-protected-eids db-before)]
-      (into []
-            (map (fn [[e a v tx]] {:entity e :attribute a :value v :tx tx}))
-            (set/difference (resource-facts db-before eids)
-                            (resource-facts db-after eids))))
-    (into []
-          (comp (filter #(false? (:added %)))
-                (filter #(resource-protected-eid? db-before (:e %)))
-                (map (fn [datom]
-                       {:entity (:e datom) :attribute (:a datom)
-                        :value (:v datom) :tx (:tx datom)})))
-          tx-data)))
+  (let [removed
+        (cond
+          (nil? tx-ops)
+          ;; Purge is invisible in Datahike's resolved datom delta. Running a
+          ;; governor against a runtime without operation provenance would
+          ;; therefore make the conservation claim unsound. Fail closed rather
+          ;; than pretending a history-set comparison can distinguish an
+          ;; ordinary cardinality-one replacement from a purge.
+          (if (resource-installed? db-before)
+            [{:operation :missing-tx-operation-provenance
+              :required :tx-ops}]
+            [])
+
+          (some history-purge-ops tx-ops)
+          ;; History loss has no ordinary datom delta, so compare the complete
+          ;; temporal fact sets, including originating transaction ids.
+          (let [eids (resource-protected-eids db-before)]
+            (into []
+                  (map (fn [[e a v tx]]
+                         {:entity e :attribute a :value v :tx tx}))
+                  (set/difference (resource-facts db-before eids)
+                                  (resource-facts db-after eids))))
+
+          :else
+          (into []
+                (comp (filter #(false? (:added %)))
+                      (filter #(resource-protected-eid? db-before (:e %)))
+                      (map (fn [datom]
+                             {:entity (:e datom) :attribute (:a datom)
+                              :value (:v datom) :tx (:tx datom)})))
+                tx-data))]
+    (into removed (semantic-append-violations db-before tx-data))))
 
 (defn- unique-identity-attrs
   [db]
@@ -205,18 +259,18 @@
    history. This is the serialized gate-side counterpart to
    [[immutable-history-violations]]."
   [db tx-data]
-  (let [protected (resource-protected-eids db)
-        identities (unique-identity-attrs db)
-        protected? #(contains? protected (resolve-eid db %))
+  (let [identities (unique-identity-attrs db)
+        protected? #(some->> (resolve-eid db %)
+                             (resource-protected-eid? db))
         referenced-by-protected?
         (fn [target]
           (when-let [target (resolve-eid db target)]
-            (and (seq protected)
-                 (boolean
-                  (d/q '[:find ?source .
-                         :in $ [?source ...] ?target
-                         :where [?source _ ?target]]
-                       db protected target)))))]
+            (boolean
+             (some #(resource-protected-eid? db %)
+                   (d/q '[:find [?source ...]
+                          :in $ ?target
+                          :where [?source _ ?target]]
+                        db target)))))]
     (into []
           (mapcat
            (fn [form]
@@ -235,14 +289,22 @@
                  :operation (first form) :attribute (nth form 2 nil)}]
 
                (and (sequential? form) (= :db/add (first form))
+                    (= :kontor.posting/transaction (nth form 2 nil))
+                    (established-transfer? db (nth form 3 nil)))
+               [{:tx form :entity (resolve-eid db (second form))
+                 :attribute :kontor.posting/transaction
+                 :operation :append-to-sealed-resource}]
+
+               (and (sequential? form) (= :db/add (first form))
                     (protected? (second form)))
                (let [[_ target attr value] form
                      eid (resolve-eid db target)
                      current (current-values db eid attr)
                      value (comparable-value db attr value)]
-                 (when (and (not (cardinality-many? db attr))
-                            (seq current)
-                            (not (contains? current value)))
+                 (when (and (not (contains? current value))
+                            (or (kontor-semantic-attr? attr)
+                                (and (not (cardinality-many? db attr))
+                                     (seq current))))
                    [{:tx form :entity eid :attribute attr
                      :old current :new value}]))
 
@@ -257,23 +319,38 @@
                      :old old :new new}]))
 
                (map? form)
-               (when-let [eid (effective-target-eid db identities form)]
-                 (when (contains? protected eid)
-                   (keep (fn [[attr value]]
-                           (when (not= :db/id attr)
-                             (let [many? (cardinality-many? db attr)
-                                   current (current-values db eid attr)
-                                   values (if (and many? (sequential? value))
-                                            value
-                                            [value])]
-                               (when (and (or (not many?) (some nil? values))
-                                          (seq current)
-                                          (some #(not (contains? current
-                                                                 (comparable-value db attr %)))
-                                                values))
-                                 {:tx form :entity eid :attribute attr
-                                  :old current :new value}))))
-                         form)))
+               (let [posting-extension
+                     (when (and (contains? form :kontor.posting/transaction)
+                                (established-transfer?
+                                 db (:kontor.posting/transaction form)))
+                       [{:tx form
+                         :entity (effective-target-eid db identities form)
+                         :attribute :kontor.posting/transaction
+                         :operation :append-to-sealed-resource}])
+                     entity-extension
+                     (when-let [eid (effective-target-eid db identities form)]
+                       (when (resource-protected-eid? db eid)
+                         (keep (fn [[attr value]]
+                                 (when (not= :db/id attr)
+                                   (let [many? (cardinality-many? db attr)
+                                         current (current-values db eid attr)
+                                         values (if (and many? (sequential? value))
+                                                  value
+                                                  [value])
+                                         new-value?
+                                         (some #(not (contains?
+                                                      current
+                                                      (comparable-value db attr %)))
+                                               values)]
+                                     (when (and new-value?
+                                                (or (kontor-semantic-attr? attr)
+                                                    (and (or (not many?)
+                                                             (some nil? values))
+                                                         (seq current))))
+                                       {:tx form :entity eid :attribute attr
+                                        :old current :new value}))))
+                               form)))]
+                 (concat posting-extension entity-extension))
 
                :else nil))
            tx-data))))

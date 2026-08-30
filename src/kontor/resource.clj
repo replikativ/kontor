@@ -30,13 +30,23 @@
 
 (defn account-ref [id] [:kontor.resource-account/id id])
 
-(defn- lookup-eid
-  "Resolve a lookup ref without Datahike's strict missing-entity pull error."
-  [db [attr value]]
-  (d/q '[:find ?e .
-         :in $ ?attr ?value
-         :where [?e ?attr ?value]]
-       db attr value))
+(defn- resolve-eid
+  "Resolve an eid, lookup ref, ident, or pulled entity map without throwing."
+  [db ref]
+  (cond
+    (nil? ref) nil
+    (map? ref) (resolve-eid db (:db/id ref))
+    (and (integer? ref) (pos? ref))
+    (when (d/q '[:find ?e . :in $ ?e :where [?e _ _]] db ref) ref)
+    (and (vector? ref) (= 2 (count ref)) (keyword? (first ref)))
+    (let [[attr value] ref]
+      (d/q '[:find ?e .
+             :in $ ?attr ?value
+             :where [?e ?attr ?value]]
+           db attr value))
+    (keyword? ref)
+    (d/q '[:find ?e . :in $ ?ident :where [?e :db/ident ?ident]] db ref)
+    :else nil))
 
 (def source-account (account-ref source-id))
 (def sink-account   (account-ref sink-id))
@@ -115,14 +125,14 @@
 (defn open-account!
   "Open (or idempotently re-open) a zero-balance wallet."
   [conn {:keys [id] :as opts}]
-  (if-let [existing-eid (lookup-eid @conn (account-ref id))]
+  (if-let [existing-eid (resolve-eid @conn (account-ref id))]
     (let [existing (d/pull @conn [:kontor.resource-account/id
                                   :kontor.resource-account/owner]
                            existing-eid)
           requested-owner (:owner opts)
           existing-owner (some-> existing :kontor.resource-account/owner :db/id)
           requested-owner-eid (when requested-owner
-                                (lookup-eid @conn requested-owner))]
+                                (resolve-eid @conn requested-owner))]
       (when (and requested-owner (nil? requested-owner-eid))
         (throw (ex-info "Resource account owner does not exist"
                         {:type ::owner-not-found :id id :owner requested-owner})))
@@ -136,7 +146,7 @@
       (catch Throwable error
         ;; A concurrent opener may win the unique-id race after our read.
         ;; Re-enter the idempotency check only when that account now exists.
-        (if (lookup-eid @conn (account-ref id))
+        (if (resolve-eid @conn (account-ref id))
           (open-account! conn opts)
           (throw error))))))
 
@@ -223,7 +233,7 @@
    slice."
   [conn account]
   (let [db @conn
-        account-eid (lookup-eid db account)]
+        account-eid (resolve-eid db account)]
     (when-not account-eid
       (throw (ex-info "Resource account not found"
                       {:type ::account-not-found :account account})))

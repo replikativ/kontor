@@ -131,6 +131,18 @@
          clojure.lang.ExceptionInfo #"idempotency"
          (resource/allocate! conn (assoc grant :resources {unit 8M}))))))
 
+(deftest wallet-owner-eids-replay-idempotently
+  (let [{:keys [conn]} (setup)
+        wallet-id (random-uuid)]
+    (actor/register-actor! conn {:uid "numeric-wallet-owner"})
+    (let [owner-eid (d/q '[:find ?e . :where
+                           [?e :kontor.actor/uid "numeric-wallet-owner"]]
+                         @conn)]
+      (is (= (resource/account-ref wallet-id)
+             (resource/open-account! conn {:id wallet-id :owner owner-eid})))
+      (is (= (resource/account-ref wallet-id)
+             (resource/open-account! conn {:id wallet-id :owner owner-eid}))))))
+
 (deftest replay-compares-explicit-audit-semantics
   (let [{:keys [conn parent]} (setup)
         id (random-uuid)
@@ -322,6 +334,25 @@
     nil
     (catch clojure.lang.ExceptionInfo error error)))
 
+(defn- append-coordinate-tx-data
+  [tx source destination commodity amount at]
+  [{:db/id "append-resource-source"
+    :kontor.posting/transaction tx
+    :kontor.posting/account source
+    :kontor.posting/commodity [:kontor.commodity/symbol commodity]
+    :kontor.posting/amount (- amount)
+    :kontor.posting/ledger resource/resource-ledger
+    :kontor.posting/display-type :product
+    :kontor.posting/posted-at at}
+   {:db/id "append-resource-destination"
+    :kontor.posting/transaction tx
+    :kontor.posting/account destination
+    :kontor.posting/commodity [:kontor.commodity/symbol commodity]
+    :kontor.posting/amount amount
+    :kontor.posting/ledger resource/resource-ledger
+    :kontor.posting/display-type :product
+    :kontor.posting/posted-at at}])
+
 (deftest resource-authority-history-is-non-destructible
   ;; Use an explicit temporal database: Datahike's CoW test branches currently
   ;; lose purge capability even though their source config keeps history.
@@ -389,6 +420,8 @@
         report (dc/with @conn [{:kontor.actor/uid "unrelated-room-actor"}])
         resource-facts-var (ns-resolve 'kontor.resource.validate
                                        'resource-facts)
+        protected-eids-var (ns-resolve 'kontor.resource.validate
+                                       'resource-protected-eids)
         scans (atom 0)]
     (is (contains? (:tx-ops report) :db/add))
     (with-redefs-fn
@@ -396,7 +429,29 @@
                             (swap! scans inc)
                             (throw (ex-info "unexpected full scan" {})))}
       #(is (nil? (governance/validate-report report))))
+    (is (zero? @scans))
+    ;; The advisory gate is delta-local too; it must not materialize every
+    ;; historical transfer/posting before accepting an unrelated write.
+    (with-redefs-fn
+      {protected-eids-var (fn [& _]
+                            (swap! scans inc)
+                            (throw (ex-info "unexpected protected-set scan" {})))}
+      #(gate/transact-with-validation
+        conn [{:kontor.actor/uid "unrelated-gate-actor"}]))
     (is (zero? @scans))))
+
+(deftest writer-governor-requires-operation-provenance
+  (let [{:keys [conn]} (setup)
+        legacy-report (dissoc
+                       (dc/with @conn [{:kontor.actor/uid "legacy-writer"}])
+                       :tx-ops)
+        error (try
+                (governance/validate-report legacy-report)
+                nil
+                (catch clojure.lang.ExceptionInfo error error))]
+    (is (= :kontor.resource/immutable-history (:type (ex-data error))))
+    (is (= :missing-tx-operation-provenance
+           (-> error ex-data :violations first :operation)))))
 
 (deftest purge-expanded-from-a-transaction-function-triggers-history-audit
   (let [{:keys [conn parent]} (setup-on
@@ -470,6 +525,39 @@
                    (d/pull @conn [:consumer.resource/tags]
                            resource/source-account))))))))
 
+(deftest established-resource-receipts-cannot-acquire-new-coordinates
+  (let [{:keys [conn parent]} (setup)
+        mint-id (random-uuid)
+        gpu "gpu-second"
+        at #inst "2026-08-30"]
+    (resource/install-unit! conn {:symbol gpu :precision 0})
+    (resource/mint! conn {:id mint-id
+                          :destination (resource/account-ref parent)
+                          :resources {unit 5M}
+                          :effective-date at})
+    (let [tx (:transaction (resource/receipt conn mint-id))
+          extension (append-coordinate-tx-data
+                     tx resource/source-account (resource/account-ref parent)
+                     gpu 3M at)
+          report (dc/with @conn extension)]
+      ;; The mandatory writer contract must reject the balanced append even
+      ;; though the old receipt already exists and the resulting shape is
+      ;; otherwise valid for both coordinates.
+      (is (= :kontor.resource/immutable-history
+             (:type (ex-data (governor-error conn extension)))))
+      (is (some #(= :append-to-sealed-resource (:operation %))
+                (resource-validate/immutable-history-violations report)))
+      ;; The early pure gate mirrors the same sealed-receipt invariant.
+      (is (= :kontor.resource/immutable-history
+             (:type (ex-data
+                     (deepest-cause
+                      (try
+                        (gate/transact-with-validation conn extension)
+                        nil
+                        (catch Throwable error error)))))))
+      (is (= {unit 5M}
+             (resource/balance conn (resource/account-ref parent)))))))
+
 (deftest sequential-operation-forms-cannot-bypass-resource-validation
   (let [{:keys [conn parent child]} (setup)
         mint-id (random-uuid)]
@@ -537,11 +625,28 @@
       (try
         (resource/install! conn)
         (resource/install-unit! conn {:symbol unit :precision 0})
+        (resource/install-unit! conn {:symbol "standalone-gpu" :precision 0})
         (resource/open-account! conn {:id parent})
         (resource/open-account! conn {:id child})
-        (resource/mint! conn {:id (random-uuid)
-                              :destination (resource/account-ref parent)
-                              :resources {unit 3M}})
+        (let [mint-id (random-uuid)]
+          (resource/mint! conn {:id mint-id
+                                :destination (resource/account-ref parent)
+                                :resources {unit 3M}})
+          ;; Bypassing Kontor's public gate and writing raw Datahike tx-data
+          ;; still reaches the mandatory serialized writer contract.
+          (is (= :kontor.resource/immutable-history
+                 (:type
+                  (ex-data
+                   (deepest-cause
+                    (try
+                      @(d/transact
+                        conn
+                        (append-coordinate-tx-data
+                         (:transaction (resource/receipt conn mint-id))
+                         resource/source-account (resource/account-ref parent)
+                         "standalone-gpu" 1M #inst "2026-08-30"))
+                      nil
+                      (catch Throwable error error))))))))
         (resource/allocate! conn {:id (random-uuid)
                                   :source (resource/account-ref parent)
                                   :destination (resource/account-ref child)
