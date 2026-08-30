@@ -49,6 +49,13 @@
   #?(:clj  (java.util.Date. (- (System/currentTimeMillis) millis))
      :cljs (js/Date. (- (.getTime (js/Date.)) millis))))
 
+(defn- instant-ms
+  "Epoch millis of an instant, portably. `.before` exists on
+   `java.util.Date` and not on `js/Date`, so comparisons in this ns go
+   through the number."
+  [d]
+  #?(:clj (.getTime ^java.util.Date d) :cljs (.getTime d)))
+
 ;; status-machine is used by kontor.compliance.legal-hold (a sub-validator inside
 ;; kontor.validation's gate). Per T-2, the gate API lives in
 ;; the leaf ns `kontor.gate`, which depends on neither this ns nor
@@ -192,6 +199,72 @@
     (map? x)    (:db/id x)
     :else       x))
 
+(defn- actor-identity
+  "A COMPARABLE identity for an actor reference, resolved against `db`.
+
+   `:no-self-approval` compares the transition actor to the entity's
+   `:kontor.audit/create-uid`. The creator side is always a resolved eid (it
+   is a `:db.type/ref` datom); the actor side is whatever the caller passed,
+   and ADR-150 deliberately made that ergonomic — `\"sarah\"`, a
+   `[:kontor.actor/uid \"sarah\"]` lookup-ref, a uuid and an eid are all
+   accepted, and the gate normalises them on the way into storage.
+
+   Comparing those two sides RAW is how the rule silently did nothing:
+   `(= 4711 \"sarah\")` and `(= 4711 [:kontor.actor/uid \"sarah\"])` are both
+   false, so an approver who identified themselves the documented friendly
+   way approved their own work and the control reported no violation. The
+   policy check runs in the PURE builder, before the gate's
+   `resolve-uid-refs` rewrites anything, so it has to do this resolution
+   itself. (ADR-153)"
+  [db x]
+  (let [x (->eid x)]
+    (cond
+      (nil? x)    nil
+      (string? x) (or (d/q '[:find ?a . :in $ ?u
+                             :where [?a :kontor.actor/uid ?u]] db x)
+                      x)
+      (vector? x) (or (d/q '[:find ?a . :in $ ?u
+                             :where [?a :kontor.actor/uid ?u]] db (second x))
+                      x)
+      :else       x)))
+
+(defn- same-actor?
+  "True iff `creator` (an eid) and `actor` denote the same actor.
+
+   The second clause covers the one case resolution cannot: an actor named
+   by a uid string that is not registered YET. The gate provisions such a
+   uid on commit (`kontor.actor/resolve-uid-refs`, permissive mode), so
+   without this the FIRST self-approval by a not-yet-enrolled actor would
+   slip through and every later one would be caught — the worst possible
+   place for a control to be inconsistent. Compare against the creator's own
+   uid string instead."
+  [db creator actor]
+  (boolean
+   (and (some? creator) (some? actor)
+        (or (= creator actor)
+            (and (string? actor)
+                 (= actor (:kontor.actor/uid
+                           (d/pull db [:kontor.actor/uid] creator))))))))
+
+(defn in-effect?
+  "True iff `policy` governs a transition happening at `at` (an instant;
+   nil means now). A policy without
+   `:kontor.approval-policy/effective-from` governs every transition —
+   that is the pre-ADR-153 behaviour and stays the default.
+
+   The cutover exists because `:no-self-approval` fails CLOSED (ADR-150):
+   it refuses when the entity carries no `:kontor.audit/create-uid`, and a
+   book cannot retroactively learn who created a pre-ADR-150 row. Without a
+   cutover the only ways to install the control on an existing book are to
+   weaken it (re-opening the hole ADR-150 closed) or to strand every
+   historical entity. `effective-from` is the third option, and it is what
+   every vendor does with a new internal control: it applies from the date
+   the control went live."
+  ([policy] (in-effect? policy nil))
+  ([{:kontor.approval-policy/keys [effective-from]} at]
+   (or (nil? effective-from)
+       (>= (instant-ms (or at (now))) (instant-ms effective-from)))))
+
 (defn- check-policy
   "Apply one :approval-policy rule to a change-spec; return nil if ok,
    {:rule ... :reason ...} if violated."
@@ -223,7 +296,10 @@
     ;; :kontor.audit/create-uid or scopes the policy to newer transitions.
     :no-self-approval
     (let [creator (->eid (:kontor.audit/create-uid (d/pull db [:kontor.audit/create-uid] entity)))
-          actor   (->eid changed-by-uid)]
+          ;; ADR-153: both sides resolved to a comparable identity. Raw
+          ;; comparison made the rule inert whenever the approver was named
+          ;; the friendly way ADR-150 documents — see `actor-identity`.
+          actor   (actor-identity db changed-by-uid)]
       (cond
         (nil? actor)
         {:rule rule
@@ -241,7 +317,7 @@
                       "(the `:actor` option does this for ledger entries).")
          :actor actor}
 
-        (= creator actor)
+        (same-actor? db creator actor)
         {:rule rule
          :reason "transition actor must differ from entity creator"
          :actor actor
@@ -334,11 +410,16 @@
    the change-spec. Returns nil on success.
 
    change-spec must include :entity, :entity-type, :facet, :from, :to,
-   and optionally :changed-by-uid, :reason-note, :supporting-doc,
-   :org."
+   and optionally :changed-at, :changed-by-uid, :reason-note,
+   :supporting-doc, :org.
+
+   Policies carrying `:kontor.approval-policy/effective-from` are skipped
+   for transitions dated before the cutover (see [[in-effect?]]); the
+   transition's `:changed-at` is the date judged, defaulting to now."
   [db change-spec]
-  (let [{:keys [entity-type facet from to org]} change-spec
-        policies (applicable-policies db entity-type facet from to org)
+  (let [{:keys [entity-type facet from to org changed-at]} change-spec
+        policies (->> (applicable-policies db entity-type facet from to org)
+                      (filter #(in-effect? % changed-at)))
         violations (->> policies
                         (keep #(check-policy db % change-spec))
                         vec)]

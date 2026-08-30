@@ -98,6 +98,9 @@
 
    Optional opts:
      :employer-name
+     :uploaded-by-uid         — the actor the mBGM :audit-doc is attributed
+                                to (ADR-153); defaults to the machine actor
+                                \"at-elda-emitter\"
      :account-map / :payable-map (override default RLG-1 routing)
      :urlaubs                 {:amount <bigdec>}                — accrue
      :sonder                  {:amount <bigdec>}                — accrue
@@ -112,7 +115,7 @@
                 journal commodity effective-date
                 dienstgeber-beitragskonto storage-uri
                 employer-name account-map payable-map
-                urlaubs sonder]
+                urlaubs sonder uploaded-by-uid]
          :as opts}]
   (when-not engine (throw (ex-info ":engine required" {})))
   (when-not source (throw (ex-info ":source required" {})))
@@ -149,7 +152,13 @@
                          {:payroll-result payroll-result
                           :dienstgeber-beitragskonto dienstgeber-beitragskonto
                           :storage-uri storage-uri
-                          :employer-name employer-name})]
+                          :employer-name employer-name
+                          ;; ADR-153 — the ELDA submission is an :audit-doc and
+                          ;; every kontor db gates its privilege waiver on
+                          ;; :no-self-approval, so it must record an uploader.
+                          ;; nil falls through to the machine actor the emit
+                          ;; builder defaults to.
+                          :uploaded-by-uid uploaded-by-uid})]
     {:payroll-result payroll-result
      :gl-tx-report   gl-report
      :urlaubs-tx-report urlaubs-report

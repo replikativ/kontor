@@ -101,7 +101,8 @@
         base {:code "LSE-BAD" :name "x" :lessor (p db "L-acme")
               :asset-class (class-eid db) :commencement-date #inst "2026-02-01"
               :term-months 12 :payment-amount 100M :payment-timing :in-arrears
-              :commodity (commodity db) :discount-rate 0.05M}]
+              :commodity (commodity db) :discount-rate 0.05M
+              :changed-by-uid "lease-admin"}]   ; ADR-153
     (testing "bad :payment-frequency is rejected"
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo #":payment-frequency must be"

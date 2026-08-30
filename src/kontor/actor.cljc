@@ -63,8 +63,39 @@
    `:kontor.approval-policy/rule :requires-actor` row. From then on
    [[assert-actor-on-posted!]] — composed into the gate's
    `validate-and-apply` and into `kontor.governance/validate-report` —
-   REFUSES any entry sealed without an actor. Off by default (a kernel
-   cannot decide a consumer's control environment); one call to turn on."
+   REFUSES any entry sealed without an actor.
+
+   ## What is on by default, precisely
+
+   `:requires-actor` is off by default: a kernel cannot decide a
+   consumer's control environment, and a single-operator bookkeeping db
+   legitimately has no actor concept. One call turns it on.
+
+   **That is not true of the approval policies as a whole, and this
+   docstring used to imply it was.** `kontor.core/install-schema!` seeds
+   `:no-self-approval` on kernel COMPLIANCE edges in every kontor
+   database — legal-hold release (`legal_hold.cljc`), audit-doc privilege
+   waiver (`audit_doc.clj`) and DSAR fulfillment (`dsar.clj`). Those are
+   on from the first write, without any opt-in. What is NOT seeded is the
+   BUSINESS-module set: `kontor-hr` payroll approval, `kontor-asset`
+   disposal, `kontor-lease` termination and `kontor-expense` report
+   approval each seed their own policies when their module schema is
+   installed, and `kontor-procurement` seeds none at all (its docstring
+   shows the row a consumer must transact).
+
+   The split matters because `:no-self-approval` fails CLOSED (see
+   `kontor.workflow.status-machine/check-policy`): a seeded policy on an
+   edge whose entity never records `:kontor.audit/create-uid` makes that
+   edge permanently impassable. That is the ADR-153 defect, and it is why
+   every builder behind a seeded policy now REQUIRES its creator rather
+   than stamping one when the caller happens to pass it.
+
+   ## Attribution cannot be un-recorded
+
+   [[assert-attribution-preserved!]] (gate) and
+   `kontor.governance/attribution-violations` (writer) refuse any write
+   that retracts `:kontor.audit/create-uid` or `:kontor.actor/uid`. Not
+   policy-gated — see that fn's docstring. ADR-153."
   (:require [datahike.api :as d]
             [kontor.actor.ref :as aref]))
 
@@ -291,6 +322,78 @@
               (sort unknown))))))          ; sorted → deterministic tx-data
 
 ;; ============================================================================
+;; Backfilling attribution on an existing book — ADR-153
+;; ============================================================================
+
+(defn entities-missing-create-uid
+  "Every entity in `db` that carries `probe-attr` but no
+   `:kontor.audit/create-uid`. `probe-attr` is whatever attribute
+   identifies the entity family you are backfilling
+   (`:kontor.audit-doc/code`, `:kontor.dsar-request/external-id`,
+   `:kontor.payroll-run/code`, …) — the kernel has no entity-type→attribute
+   registry, and inventing one to serve a migration would be the tail
+   wagging the dog."
+  [db probe-attr]
+  (vec
+   (sort
+    (d/q '[:find [?e ...]
+           :in $ ?probe
+           :where
+           [?e ?probe _]
+           [(missing? $ ?e :kontor.audit/create-uid)]]
+         db probe-attr))))
+
+(defn backfill-create-uid-tx-data
+  "Pure tx-data for ONE auditable commit that stamps
+   `:kontor.audit/create-uid` on entities that have none.
+
+   Required `:uid` — the actor the backfilled attribution points at.
+   Targets come from `:entities` (explicit eids) and/or `:probe-attrs`
+   (each expanded through [[entities-missing-create-uid]]).
+
+   The actor is provisioned with `:kontor.actor/kind :unregistered` when
+   the uid is new, which is the whole point: an auditor asking \"who
+   created this document?\" must be able to tell an answer that was
+   RECORDED from one that was RECONSTRUCTED during a migration. Do not
+   reuse a real person's uid here — that would launder a guess into an
+   attribution. If the uid already exists the kind is left alone (the
+   caller has deliberately enrolled it).
+
+   Deliberately NOT a `:legacy` flag or a nil-creator exemption on
+   `:no-self-approval`. Either of those puts the decision \"is this
+   entity's creator knowable?\" inside the control, where it becomes a
+   permanent bypass that any new write can also claim. A backfill is a
+   one-off commit an auditor can see, diff and date."
+  [db {:keys [uid name entities probe-attrs]}]
+  (when-not (and (string? uid) (seq uid))
+    (throw (ex-info "kontor.actor: :uid is required for a backfill"
+                    {:type :kontor.actor/invalid-actor :uid uid})))
+  (let [targets (into (vec entities)
+                      (mapcat #(entities-missing-create-uid db %))
+                      probe-attrs)
+        targets (vec (distinct targets))
+        known?  (some? (resolve-actor db uid))
+        tempid  (tempid-for uid)]
+    (if (empty? targets)
+      []
+      (into [(cond-> {:db/id tempid :kontor.actor/uid uid}
+               name          (assoc :kontor.actor/name name)
+               (not known?)  (assoc :kontor.actor/kind unregistered-kind))]
+            (map (fn [e] [:db/add e :kontor.audit/create-uid tempid]))
+            targets))))
+
+(defn backfill-create-uid!
+  "Transact what [[backfill-create-uid-tx-data]] builds — one commit, so
+   the audit chain carries the whole migration as a single dated event.
+
+   Plain `d/transact` for the same reason [[register-actor!]] uses it:
+   the write carries no postings, so the gate's accounting validators have
+   nothing to say about it, and a book being migrated should not need the
+   gate wired to become approvable."
+  [conn opts]
+  (d/transact conn (backfill-create-uid-tx-data (d/db conn) opts)))
+
+;; ============================================================================
 ;; The policy — "a posted entry must name its actor"
 ;; ============================================================================
 
@@ -397,6 +500,140 @@
                      (nil? (:kontor.transaction/posted-by
                             (d/pull db [:kontor.transaction/posted-by] eid))))]
       {:tx form :reason :kontor.actor/no-actor-recorded}))))
+
+;; ============================================================================
+;; Attribution is non-retractable — ADR-153
+;;
+;; `:no-self-approval` fails CLOSED on a nil creator (ADR-150), which makes
+;; the creator datom a load-bearing part of an internal control rather than
+;; a decoration. A fail-closed control has a denial-of-service dual: whoever
+;; can make the creator nil can make the entity permanently unapprovable.
+;;
+;; That is reachable from an ORDINARY lifecycle event, not only from legacy
+;; rows. `datahike.db.transaction/retract-entity` collects every ref datom
+;; POINTING AT the entity and retracts them too, so a single
+;; `[:db/retractEntity <actor>]` — "clean up the actor who left" — nils
+;; `:kontor.audit/create-uid` on every entity that actor ever created. The
+;; audit trail records a routine cleanup; the four-eyes control on all of
+;; that actor's documents is gone. Under the PERMISSIVE reading of the rule
+;; the same move defeats four-eyes outright (nil creator → no violation →
+;; self-approval succeeds); under the fail-closed reading it strands the
+;; documents instead. Neither is acceptable, and the fix is the same one:
+;; the creator datom must not be retractable.
+;;
+;; Deactivation is the modelled path (`:kontor.actor/active false`, which
+;; `resolve-uid-refs` already refuses to let act) — `actor-test`'s
+;; "deactivation is not deletion" asserted this and nothing enforced it.
+;; ============================================================================
+
+(def ^:private whole-entity-destructive-ops
+  "datahike tx-op keywords that destroy an entire existing entity (eid in
+   slot 1). Mirrors `kontor.compliance.legal-hold/destructive-ops`."
+  #{:db/purge :db.purge/entity :db/retractEntity :db.fn/retractEntity})
+
+(def ^:private attr-destructive-ops
+  "datahike tx-op keywords that destroy one attribute of an existing
+   entity (eid in slot 1, attr in slot 2)."
+  #{:db.purge/attribute :db/retract})
+
+(def non-retractable-attrs
+  "Attributes whose retraction destroys audit attribution and is therefore
+   refused outright.
+
+   `:kontor.audit/create-uid` is what `:no-self-approval` compares an
+   approver against. `:kontor.actor/uid` is the actor's identity — losing it
+   is how a `:db/retractEntity` on the actor presents, and it is also what
+   makes every historical ref to that actor resolve to an attribute-less
+   phantom again (the pre-ADR-150 defect).
+
+   NOT included: `:kontor.audit/write-uid` (last-writer, advisory) and
+   `:kontor.transaction/posted-by` (already covered for posted entries by
+   the sealing guard, which refuses any retraction against a posted row).
+   Scope is deliberately the attributes a CONTROL reads, not everything
+   audit-shaped."
+  #{:kontor.audit/create-uid :kontor.actor/uid})
+
+(defn- actor-entity?
+  "True iff `target` (an eid or lookup-ref) resolves to something carrying
+   `:kontor.actor/uid` in `db`."
+  [db target]
+  (boolean
+   (try (some? (:kontor.actor/uid (d/pull db [:kontor.actor/uid] target)))
+        (catch #?(:clj Exception :cljs :default) _ false))))
+
+(defn attribution-destroying-writes
+  "Every form in `tx-data` that would destroy audit attribution. Returns a
+   vector of `{:tx :eid :attr :reason}`; empty when clean. Pure over
+   (db, tx-data) — exposed so a caller can inspect rather than throw.
+
+   Covers datahike's whole purge + retract surface: the whole-entity ops
+   (`:db/purge` / `:db.purge/entity` / `:db/retractEntity` /
+   `:db.fn/retractEntity`) when the target is a `:kontor.actor`, the
+   attribute-level ops (`:db/retract` / `:db.purge/attribute`) on a
+   [[non-retractable-attrs]] member, and the entity-map nil-retract
+   (`{:db/id e :kontor.audit/create-uid nil}`) that the ADR-140 red-team
+   found is the shape most scans miss.
+
+   Short-circuits on tx-data with no destructive form, so the ordinary
+   append-only write pays one `some`."
+  [db tx-data]
+  (let [destructive? (fn [f]
+                       (or (and (vector? f)
+                                (or (whole-entity-destructive-ops (first f))
+                                    (attr-destructive-ops (first f))))
+                           (and (map? f)
+                                (some (fn [a] (and (contains? f a) (nil? (get f a))))
+                                      non-retractable-attrs))))]
+    (if-not (some destructive? tx-data)
+      []
+      (vec
+       (keep
+        (fn [f]
+          (cond
+            (and (vector? f) (whole-entity-destructive-ops (first f)))
+            (when (actor-entity? db (second f))
+              {:tx f :eid (second f) :reason :kontor.actor/actor-deletion-refused})
+
+            (and (vector? f) (attr-destructive-ops (first f))
+                 (non-retractable-attrs (nth f 2 nil)))
+            {:tx f :eid (second f) :attr (nth f 2 nil)
+             :reason :kontor.actor/attribution-retraction-refused}
+
+            (map? f)
+            (when-let [a (some (fn [a] (when (and (contains? f a) (nil? (get f a))) a))
+                               non-retractable-attrs)]
+              {:tx f :eid (:db/id f) :attr a
+               :reason :kontor.actor/attribution-retraction-refused})))
+        tx-data)))))
+
+(defn assert-attribution-preserved!
+  "Throw when `tx-data` would destroy audit attribution — the
+   pre-resolution half of the ADR-153 guard, composed into
+   `kontor.validation/validate-and-apply`. The mandatory writer-side half
+   is `kontor.governance/attribution-violations`.
+
+   NOT policy-gated. `:requires-actor` is a statement about how a book
+   WRITES; this is a statement about what a book may DESTROY, and the
+   answer does not depend on whether the consumer has opted into actor
+   discipline: a creator datom that exists was recorded for a reason, and a
+   later transaction does not get to un-record it. (A book with no actor
+   concept has no `:kontor.audit/create-uid` datoms to retract, so it never
+   reaches this.)"
+  [db tx-data]
+  (when-let [v (seq (attribution-destroying-writes db tx-data))]
+    (throw (ex-info
+            (str "kontor.actor: refused — this write would destroy audit "
+                 "attribution " (pr-str (mapv #(select-keys % [:reason :eid :attr]) v))
+                 ". :kontor.audit/create-uid is what :no-self-approval compares an "
+                 "approver against, and the rule fails CLOSED (ADR-150), so nilling "
+                 "it does not loosen four-eyes — it makes the entity permanently "
+                 "unapprovable. Note that :db/retractEntity on a :kontor.actor does "
+                 "this to EVERY entity that actor created, because datahike retracts "
+                 "the inbound ref datoms too. Deactivation is the modelled path: "
+                 "(kontor.actor/register-actor! conn {:uid … :active false}) retires "
+                 "an actor while every historical ref keeps resolving. (ADR-153)")
+            {:type       :kontor.actor/attribution-destroyed
+             :violations (vec v)}))))
 
 (defn assert-actor-on-posted!
   "Throw when an entry is sealed without a resolvable, active actor AND an

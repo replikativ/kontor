@@ -95,7 +95,8 @@
              conn {:code "DPIA-acme-2026"
                    :type :dpia
                    :storage-uri "s3://test/dpia.pdf"
-                   :category :hr-monitoring-consent})
+                   :category :hr-monitoring-consent
+                   :uploaded-by-uid "hr-lead"})
           dpia (ref-eid (d/db conn) :kontor.audit-doc/code "DPIA-acme-2026")
           _ (doseq [[code subj] [["CONS-mueller" mueller]
                                  ["CONS-schmidt" schmidt]]]

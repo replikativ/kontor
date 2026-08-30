@@ -138,7 +138,8 @@
                               (-> (audit-doc/create-doc! conn
                                                          {:code "DOC-PLACE"
                                                           :type :legal-hold-order
-                                                          :storage-uri "s3://docs/place.pdf"})
+                                                          :storage-uri "s3://docs/place.pdf"
+                                                          :uploaded-by-uid "counsel"})
                                   :tempids (get "audit-doc-1"))
                               :scope-eids [acme]
                               :reason-note "preservation."})

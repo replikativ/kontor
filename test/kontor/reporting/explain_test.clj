@@ -205,7 +205,8 @@
            {:code        "credit-memo-PD-001"
             :type        :credit-memo
             :title       "Credit memo for INV-EXP-AD"
-            :storage-uri "s3://kontor-test/credit-memo-001.pdf"})
+            :storage-uri "s3://kontor-test/credit-memo-001.pdf"
+            :uploaded-by-uid "controller"})
           doc-eid (:db/id (d/entity db-after [:kontor.audit-doc/code "credit-memo-PD-001"]))]
       (sm/record-status-change!
        conn

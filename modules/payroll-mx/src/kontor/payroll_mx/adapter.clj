@@ -88,6 +88,7 @@
                 \"206.06\" <INFONAVIT payable>}
              :run-code \"ACME-MX-2026-05-001\"
              :tx-code  \"TX-ACME-MX-2026-05\"
+             :actor    \"payroll-clerk\"       ; ADR-153 — who ran it
              :journal  <NOM journal eid>
              :commodity <MXN eid>}))
    ```

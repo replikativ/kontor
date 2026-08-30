@@ -253,6 +253,12 @@
     ;; no-silent-retract check so the more-specific 'blocked by hold X'
     ;; error wins on destructive-write-of-posted-held-entity.
     (legal-hold/assert-no-hold-violating-destructive-writes! txdb tx-data)
+    ;; ADR-153 — audit attribution is not retractable. Sits next to sealing
+    ;; because it is the same kind of claim (a datom that was recorded stays
+    ;; recorded) and, like sealing, it must run before anything that could
+    ;; commit: `:no-self-approval` fails CLOSED on a nil creator, so a write
+    ;; that nils one does not loosen four-eyes, it strands the entity.
+    (actor/assert-attribution-preserved! txdb tx-data)
     (sealing/assert-no-silent-retracts! txdb tx-data)
     (period/assert-no-write-on-sealed! txdb tx-data)
     (period/assert-not-in-locked-period! txdb tx-data)

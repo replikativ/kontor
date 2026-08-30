@@ -115,41 +115,66 @@
    Optional `:category` / `:language` set the corresponding
    `:kontor.audit-doc/category` (ADR-075) + `:kontor.audit-doc/language` (ADR-078)
    facets in one builder call — matches the substrate canonical
-   vocabulary so callers don't reach for the raw attr names."
+   vocabulary so callers don't reach for the raw attr names.
+
+   `:uploaded-by-uid` is REQUIRED (ADR-153; it was optional through
+   ADR-051). The uploader IS the creator, and the creator is what
+   [[approval-policy-seeds]] — installed in EVERY kontor db via
+   `kontor.core/install-schema!` — makes `:no-self-approval` compare a
+   later waiver actor against. Since ADR-150 made that rule fail CLOSED on
+   a nil creator, a doc created without an uploader can never have its
+   privilege waived, including under court order. Optional-with-a-default
+   would be worse than either: any sentinel value is a uid two different
+   people can both equal, which is the self-approval hole wearing a
+   disguise. So it is required, and callers that genuinely have no human
+   uploader name the machine that did it — `kontor.actor/register-actor!`
+   takes `:kind :system` for exactly this."
   [_db {:keys [code type title description content-hash storage-uri
                uploaded-by-uid uploaded-at tempid category language]
         :or {tempid "audit-doc-1"}}]
   (when-not code     (throw (ex-info ":code required" {})))
   (when-not type     (throw (ex-info ":type required" {})))
   (when-not storage-uri (throw (ex-info ":storage-uri required" {})))
+  (when-not uploaded-by-uid
+    (throw (ex-info
+            (str ":uploaded-by-uid required (ADR-153) — it is stamped as "
+                 ":kontor.audit/create-uid, which is what the seeded "
+                 ":no-self-approval policy on every privilege-waiver edge "
+                 "compares the waiving actor against. Without it this document's "
+                 "privilege can never be waived. Pass the uploading actor's uid "
+                 "(kontor.actor/register-actor!); for an unattended emit, register "
+                 "the emitting system as an actor with :kind :system.")
+            {:type :kontor.audit-doc/uploader-required :code code})))
   [(cond-> {:db/id tempid
             :kontor.audit-doc/code code
             :kontor.audit-doc/type type
             :kontor.audit-doc/storage-uri storage-uri
-            :kontor.audit-doc/uploaded-at (or uploaded-at (java.util.Date.))}
+            :kontor.audit-doc/uploaded-at (or uploaded-at (java.util.Date.))
+            ;; The uploader IS the creator — stamp :kontor.audit/create-uid
+            ;; too so ADR-038 :no-self-approval can fire on privilege
+            ;; waivers (ADR-051): the doc creator can't waive its privilege
+            ;; alone. UNCONDITIONAL since ADR-153 — see the docstring.
+            :kontor.audit-doc/uploaded-by-uid uploaded-by-uid
+            :kontor.audit/create-uid uploaded-by-uid}
      title           (assoc :kontor.audit-doc/title title)
      description     (assoc :kontor.audit-doc/description description)
      content-hash    (assoc :kontor.audit-doc/content-hash content-hash)
      category        (assoc :kontor.audit-doc/category category)
-     language        (assoc :kontor.audit-doc/language language)
-     ;; The uploader IS the creator — stamp :kontor.audit/create-uid too
-     ;; so ADR-038 :no-self-approval can fire on privilege
-     ;; waivers (ADR-051): the doc creator can't waive its
-     ;; privilege alone.
-     uploaded-by-uid (assoc :kontor.audit-doc/uploaded-by-uid uploaded-by-uid
-                            :kontor.audit/create-uid uploaded-by-uid))])
+     language        (assoc :kontor.audit-doc/language language))])
 
 (defn create-doc!
   "Create an :audit-doc entity in one tx. Routes through the gate
    (ADR-068). Returns the tx-report.
 
    Required keys in spec:
-     :code           — opaque consumer-supplied identifier
-     :type           — keyword (e.g. :credit-memo, :customer-email)
-     :storage-uri    — where the bytes live
+     :code            — opaque consumer-supplied identifier
+     :type            — keyword (e.g. :credit-memo, :customer-email)
+     :storage-uri     — where the bytes live
+     :uploaded-by-uid — the uploading actor (ADR-153; see
+                        `create-doc-tx-data` for why this is not optional)
 
    Optional:
-     :title, :description, :content-hash, :uploaded-by-uid,
+     :title, :description, :content-hash, :category, :language,
      :uploaded-at (default now).
 
    The pure tx-data builder is `create-doc-tx-data` (ADR-068)."
