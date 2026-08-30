@@ -3813,6 +3813,64 @@
                      transaction (ADR-021)."}])
 
 ;; ============================================================================
+;; Conserved resource authority — ADR-171.
+;;
+;; A resource vector is not a second ledger. A resource account is an ordinary
+;; Kontor account carrying these control-plane attributes, and a transfer is an
+;; ordinary balanced transaction in the dedicated resource ledger. The one new
+;; invariant is a cone: :wallet accounts may never have a negative balance in
+;; any resource commodity. Datahike's writer enforces that atomically.
+;; ============================================================================
+
+(def ^:private resource-account-attrs
+  [{:db/ident       :kontor.resource-account/id
+    :db/valueType   :db.type/uuid
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable identity of a controlled resource account. The
+                     same entity is also a :kontor.account and therefore uses
+                     the existing posting/balance algebra. ADR-171."}
+
+   {:db/ident       :kontor.resource-account/owner
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Optional ref to the consumer-owned principal, Run, Room,
+                     or other object that owns this allocation. Kontor records
+                     custody but does not define application authorization."}
+
+   {:db/ident       :kontor.resource-account/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":wallet | :source | :sink. Wallet balances are constrained
+                     non-negative. Source and sink are the balanced counter-
+                     accounts for minting and consumption respectively."}])
+
+(def ^:private resource-transfer-attrs
+  [{:db/ident       :kontor.resource-transfer/id
+    :db/valueType   :db.type/uuid
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Stable idempotency and receipt identity for one conserved
+                     vector transfer. Stored on the ordinary transaction."}
+
+   {:db/ident       :kontor.resource-transfer/kind
+    :db/valueType   :db.type/keyword
+    :db/cardinality :db.cardinality/one
+    :db/doc         ":mint | :grant | :consume | :return. Open-set for later
+                     reservation/settlement policies; every transfer remains
+                     shape-checked and conserved."}
+
+   {:db/ident       :kontor.resource-transfer/source
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Resource account credited by this transfer."}
+
+   {:db/ident       :kontor.resource-transfer/destination
+    :db/valueType   :db.type/ref
+    :db/cardinality :db.cardinality/one
+    :db/doc         "Resource account debited by this transfer."}])
+
+;; ============================================================================
 ;; Country + state + place-of-supply — ADR-023.
 ;;
 ;; First-class country and state entities, composite-tuple identity on
@@ -5296,6 +5354,26 @@
 ;; Aggregate
 ;; ============================================================================
 
+(def resource
+  "Minimal cohabiting schema for conserved resource authority.
+
+   This is intentionally the ordinary Kontor posting spine rather than a
+   parallel budget model. Applications such as Dvergr can install it into an
+   existing room database without importing the full accounting kernel."
+  (vec
+   (concat
+    audit-attrs
+    actor-attrs
+    commodity-attrs
+    account-attrs
+    journal-attrs
+    transaction-attrs
+    posting-attrs
+    ledger-attrs
+    posting-ledger-attrs
+    resource-account-attrs
+    resource-transfer-attrs)))
+
 (def all
   "Full kernel schema as one transactable vector. Order matters where
    refs are involved — but datahike resolves refs by ident so within
@@ -5339,6 +5417,8 @@
     account-analytic-attrs               ; ADR-022
     ledger-attrs                         ; ADR-021
     posting-ledger-attrs                 ; ADR-021
+    resource-account-attrs               ; ADR-171
+    resource-transfer-attrs              ; ADR-171
     country-attrs                        ; ADR-023
     country-code-attrs                   ; ADR-023
     country-group-attrs                  ; ADR-023

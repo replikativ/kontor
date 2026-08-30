@@ -55,6 +55,7 @@
             [kontor.gate :as gate]
             [kontor.money :as money]
             [kontor.numbering :as numbering]
+            [kontor.resource.validate :as resource]
             [kontor.compliance.legal-hold :as legal-hold]
             [kontor.compliance.period :as period]
             [kontor.compliance.sealing :as sealing]
@@ -263,6 +264,9 @@
     (period/assert-not-in-locked-period! txdb tx-data)
     (state-machine/assert-transition! txdb tx-data)
     (assert-postings-sum-to-zero! txdb tx-data)
+    ;; ADR-171 — resource transfers are ordinary balanced postings plus a
+    ;; non-negative control cone on wallet accounts.
+    (resource/assert-tx-data! txdb tx-data)
     ;; ADR-022 / ADR-140: an account that names required analytic plans must be
     ;; fully distributed. The authoritative pass is `kontor.governance` in the
     ;; writer; this one runs pre-resolution so the operator gets the error with
