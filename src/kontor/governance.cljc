@@ -52,6 +52,7 @@
             [kontor.compliance.legal-hold :as legal-hold]
             [kontor.compliance.period :as period]
             [kontor.money :as money]
+            [kontor.resource.validate :as resource]
             [kontor.workflow.state-machine :as state-machine]
             [kontor.invariant :as inv]))
 
@@ -476,6 +477,7 @@
   (when-let [v (seq (balance-violations report))]
     (throw (ex-info "Postings do not sum to zero per (entity, ledger, commodity)"
                     {:type :validation/sum-to-zero :violations (vec v)})))
+  (resource/assert-report! report)
   (when-let [v (seq (analytic-violations report))]
     (throw (ex-info "Analytic distribution missing or not 100% for a required plan"
                     {:type :kontor.analytic/required-plan-unsatisfied

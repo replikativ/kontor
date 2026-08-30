@@ -34,6 +34,7 @@ file is the reading order over what the code already encodes.
    5.3 [Every business write exposes a `*-tx-data` builder (ADR-068)](#53-tx-data-builders)
    5.4 [`kontor.book` verb facade + ref/option discipline + `reverse!` (ADR-095, ADR-124, ADR-152, ADR-170)](#54-kontorbook)
    5.5 [Gapless per-journal legal document numbering (ADR-151)](#55-legal-document-numbering)
+   5.6 [Conserved resource vectors (ADR-171)](#56-conserved-resource-vectors)
 6. [Reports as marginalizations](#6-reports-as-marginalizations)
    6.1 [`marginalize` / σ_E + `:posting/dimensions` (ADR-096, ADR-097)](#61-marginalize)
    6.2 [Three axis kinds: scalar, set, weighted (ADR-022, ADR-097, ADR-140)](#62-three-axis-kinds-scalar-set-weighted)
@@ -227,6 +228,16 @@ The mirror is now DERIVED from `kontor.book.build/posting-option-keys` and recon
 Because allocation and consumption are the same transaction, a rolled-back entry consumes no number — there is no reserved-but-unused state to leak a hole from, which is why kontor needs no equivalent of Odoo's `standard` vs `no_gap` distinction. Backdating into a bucket the journal has already left is **refused** (it would restart at 1 and re-issue a used number). The one hole that can still appear is an ADR-007 `:db/purge`, which is exactly what `sequence-gaps` exists to surface rather than hide.
 
 **Ref and option discipline (ADR-124).** A bare string in an account slot means `:kontor.account/path` (the account's UNIQUE identity attribute — never `:kontor.account/code`, which collides across charts per ADR-119/ADR-123); in `:journal` it means `:kontor.journal/code`; in `:commodity`, `:kontor.commodity/symbol`. All three are resolved STRICTLY: naming something that does not exist raises `:kontor.book/unresolved-ref` with the verb slot named, and is never read as a tempid. Option keys are strict too — an unrecognised key raises `:kontor.book/unknown-option` instead of being dropped, the same discipline `kontor.reporting.report/check-options!` applies on the read side. `:settles` is an entry option (`:kontor.transaction/settles`), without which the GL clears a receivable that the open-item subledger still reports as fully open. A settlement verb falls back from a `:cash` to a `:bank` journal when the book has no `:cash` one.
+
+### 5.6 Conserved resource vectors
+
+A resource vector is an element of the same account × commodity balance module as money, not a parallel budget database. `kontor.resource` posts the whole vector as one sealed transaction in a dedicated resource ledger: the source is credited and the destination debited once per resource commodity. `:kontor.resource-account/*` marks ordinary Kontor accounts as `:wallet`, `:source`, or `:sink`; `:kontor.resource-transfer/*` gives the ordinary transaction a stable receipt identity and route. (ADR-171)
+
+The attributes are part of the aggregate Kontor schema, but the resource ledger, journal, source, and sink are deliberately opt-in via `kontor.resource/install-defaults!`. An ordinary accounting book therefore does not acquire control accounts or change journal selection merely because it upgrades Kontor; Dvergr and other resource-managing applications install the substrate explicitly.
+
+The extra invariant is a **non-negative cone on wallets**. Both the normal validation gate and the mandatory writer governor reject a post-state in which any wallet coordinate is negative. Because Datahike serializes the transactor against the preceding transaction's `db-after`, two concurrent child grants cannot both spend the same parent units. A grant therefore transfers authority instead of copying a ceiling; consumption transfers to the sink; returning unused units transfers them back. Source and sink accounts provide the balancing counter-side and are deliberately outside the cone.
+
+Kontor owns numeric conservation and durable receipts, not application authorization. The optional wallet `:owner` is a ref into the cohabiting consumer schema; Dvergr/Simmis decide who may issue or use a grant and record that policy basis on their Run/effect receipt. This preserves the full local Datahike vertical without making accounting relationships impersonate ReBAC.
 
 ---
 
