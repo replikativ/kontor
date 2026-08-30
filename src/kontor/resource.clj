@@ -7,6 +7,7 @@
    governor; allocating to a child therefore consumes the parent's authority
    instead of copying a budget ceiling. ADR-171."
   (:require [datahike.api :as d]
+            [kontor.actor :as actor]
             [kontor.gate :as gate]
             [kontor.money :as money]
             [kontor.posting.build :as posting-build]
@@ -150,9 +151,12 @@
   "Pure builder for a balanced resource-vector transfer.
 
    Required: `:id`, `:kind`, `:source`, `:destination`, `:resources`.
+   Pass a distinct string `:tx-tempid` when composing multiple builders into
+   one atomic tx-data vector.
    `:effective-date` and `:posted-at` default to now in the effectful wrapper;
    callers using this pure builder must provide `:effective-date`."
-  [{:keys [id kind source destination resources effective-date posted-at actor]}]
+  [{:keys [id kind source destination resources effective-date posted-at actor
+           tx-tempid]}]
   (when-not (instance? UUID id)
     (throw (ex-info "Resource transfer :id must be a UUID"
                     {:type ::invalid-transfer :id id})))
@@ -178,7 +182,8 @@
                       :kontor.posting/ledger resource-ledger}])
                   resources)]
     (posting-build/post-transaction-tx-data
-     {:transaction {:kontor.transaction/external-id (str "kontor-resource|" id)
+     {:tx-tempid tx-tempid
+      :transaction {:kontor.transaction/external-id (str "kontor-resource|" id)
                     :kontor.transaction/journal resource-journal
                     :kontor.transaction/effective-date effective-date
                     :kontor.transaction/narration (str "Resource " (name kind))
@@ -229,10 +234,14 @@
         tx (d/q '[:find ?tx . :in $ ?id
                   :where [?tx :kontor.resource-transfer/id ?id]] db id)]
     (when tx
-      (let [{:kontor.resource-transfer/keys [kind source destination]}
+      (let [{:kontor.resource-transfer/keys [kind source destination]
+             :kontor.transaction/keys [effective-date posted-at posted-by]}
             (d/pull db [:kontor.resource-transfer/kind
                         :kontor.resource-transfer/source
-                        :kontor.resource-transfer/destination]
+                        :kontor.resource-transfer/destination
+                        :kontor.transaction/effective-date
+                        :kontor.transaction/posted-at
+                        :kontor.transaction/posted-by]
                     tx)
             destination (:db/id destination)
             resources
@@ -252,19 +261,34 @@
                          :kontor.resource-account/id)
          :destination (some-> (d/pull db [:kontor.resource-account/id] destination)
                               :kontor.resource-account/id)
-         :resources resources}))))
+         :resources resources
+         :effective-date effective-date
+         :posted-at posted-at
+         :actor (:db/id posted-by)}))))
 
-(defn- requested-receipt [db {:keys [id kind source destination resources]}]
-  {:id id :kind kind
-   :source (:kontor.resource-account/id
-            (d/pull db [:kontor.resource-account/id] source))
-   :destination (:kontor.resource-account/id
-                 (d/pull db [:kontor.resource-account/id] destination))
-   :resources (into {}
-                    (map (fn [[resource amount]]
-                           [(symbol-of db (commodity-ref resource))
-                            (money/->amount amount)]))
-                    resources)})
+(defn- requested-receipt
+  [db {:keys [id kind source destination resources actor] :as spec}]
+  (let [coordinates
+        (mapv (fn [[resource amount]]
+                [(symbol-of db (commodity-ref resource))
+                 (money/->amount amount)])
+              resources)]
+    (when-not (= (count coordinates) (count (into #{} (map first) coordinates)))
+      (throw (ex-info "Resource vector has a duplicate database coordinate"
+                      {:type ::invalid-vector :resources resources})))
+    (cond-> {:id id :kind kind
+             :source (:kontor.resource-account/id
+                      (d/pull db [:kontor.resource-account/id] source))
+             :destination (:kontor.resource-account/id
+                           (d/pull db [:kontor.resource-account/id] destination))
+             :resources (into {} coordinates)
+             ;; Omission is meaningful: a retry that drops the original actor
+             ;; is not the same audited command.
+             :actor (actor/resolve-actor db actor)}
+      (contains? spec :effective-date)
+      (assoc :effective-date (:effective-date spec))
+      (contains? spec :posted-at)
+      (assoc :posted-at (:posted-at spec)))))
 
 (defn- assert-replay! [conn spec existing]
   (let [requested (requested-receipt @conn spec)]
@@ -278,22 +302,24 @@
   "Commit one transfer through the Kontor validation gate. Replaying the same
    id and payload returns `:status :duplicate`; reusing an id for a different
    vector or route is an error."
-  [conn {:keys [id] :as spec}]
+  [conn {:keys [id] :as requested-spec}]
   (if-let [existing (receipt conn id)]
-    (assert-replay! conn spec existing)
+    (assert-replay! conn requested-spec existing)
     (let [now (Date.)
-          spec (cond-> spec
-                 (nil? (:effective-date spec)) (assoc :effective-date now)
-                 (nil? (:posted-at spec)) (assoc :posted-at now))]
+          spec (cond-> requested-spec
+                 (nil? (:effective-date requested-spec)) (assoc :effective-date now)
+                 (nil? (:posted-at requested-spec)) (assoc :posted-at now))]
       (try
         (gate/transact-with-validation conn (transfer-tx-data spec))
         (assoc (receipt conn id) :status :committed)
         (catch Throwable error
           ;; A simultaneous replay can lose the unique-id race after the
           ;; optimistic read. It is idempotent only if the durable payload is
-          ;; byte-for-byte the same semantic transfer.
+          ;; the same requested semantic transfer. Generated timestamps are
+          ;; deliberately absent from `requested-spec`, while explicit audit
+          ;; fields participate in equality.
           (if-let [existing (receipt conn id)]
-            (assert-replay! conn spec existing)
+            (assert-replay! conn requested-spec existing)
             (throw error)))))))
 
 (defn mint! [conn spec]

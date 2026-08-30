@@ -3,22 +3,26 @@
   (:require [clojure.test :refer [deftest is]]
             [datahike.api :as d]
             [datahike.core :as dc]
+            [kontor.actor :as actor]
             [kontor.core :as core]
             [kontor.gate :as gate]
             [kontor.governance :as governance]
-            [kontor.resource :as resource]))
+            [kontor.resource :as resource]
+            [kontor.resource.validate :as resource-validate]))
 
 (def unit "microUSD")
 
-(defn- setup []
-  (let [conn   (core/create-test-db)
-        parent (random-uuid)
+(defn- setup-on [conn]
+  (let [parent (random-uuid)
         child  (random-uuid)]
     (resource/install-defaults! conn)
     (resource/install-unit! conn {:symbol unit :name "Micro US dollars" :precision 0})
     (resource/open-account! conn {:id parent :name "parent"})
     (resource/open-account! conn {:id child :name "child"})
     {:conn conn :parent parent :child child}))
+
+(defn- setup []
+  (setup-on (core/create-test-db)))
 
 (deftest vector-transfer-is-an-ordinary-balanced-kontor-entry
   (let [{:keys [parent child]} (setup)
@@ -116,6 +120,61 @@
          clojure.lang.ExceptionInfo #"idempotency"
          (resource/allocate! conn (assoc grant :resources {unit 8M}))))))
 
+(deftest replay-compares-explicit-audit-semantics
+  (let [{:keys [conn parent]} (setup)
+        id (random-uuid)
+        day-1 #inst "2026-08-30"
+        day-2 #inst "2026-08-31"
+        posted-1 #inst "2026-08-30T01:00:00.000-00:00"
+        posted-2 #inst "2026-08-30T02:00:00.000-00:00"]
+    (actor/register-actors! conn [{:uid "alice"} {:uid "bob"}])
+    (resource/mint! conn {:id id
+                          :destination (resource/account-ref parent)
+                          :resources {unit 10M}
+                          :effective-date day-1
+                          :posted-at posted-1
+                          :actor "alice"})
+    (is (= :duplicate
+           (:status (resource/mint! conn {:id id
+                                          :destination (resource/account-ref parent)
+                                          :resources {unit 10M}
+                                          :effective-date day-1
+                                          :posted-at posted-1
+                                          :actor "alice"}))))
+    (doseq [changed [{:effective-date day-2 :posted-at posted-1 :actor "alice"}
+                     {:effective-date day-1 :posted-at posted-2 :actor "alice"}
+                     {:effective-date day-1 :posted-at posted-1 :actor "bob"}
+                     {:effective-date day-1 :posted-at posted-1}]]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo #"idempotency"
+           (resource/mint! conn (merge {:id id
+                                        :destination (resource/account-ref parent)
+                                        :resources {unit 10M}}
+                                       changed)))))))
+
+(deftest pure-transfer-builders-compose-with-distinct-tempids
+  (let [{:keys [conn parent child]} (setup)
+        child-2 (random-uuid)]
+    (resource/open-account! conn {:id child-2})
+    (resource/mint! conn {:id (random-uuid)
+                          :destination (resource/account-ref parent)
+                          :resources {unit 100M}})
+    (let [grant (fn [id tempid destination amount]
+                  (resource/transfer-tx-data
+                   {:id id :tx-tempid tempid :kind :grant
+                    :source (resource/account-ref parent)
+                    :destination destination
+                    :resources {unit amount}
+                    :effective-date #inst "2026-08-30"}))
+          tx-data (into (grant (random-uuid) "grant-a"
+                               (resource/account-ref child) 40M)
+                        (grant (random-uuid) "grant-b"
+                               (resource/account-ref child-2) 60M))]
+      (gate/transact-with-validation conn tx-data)
+      (is (= {} (resource/balance conn (resource/account-ref parent))))
+      (is (= {unit 40M} (resource/balance conn (resource/account-ref child))))
+      (is (= {unit 60M} (resource/balance conn (resource/account-ref child-2)))))))
+
 (deftest resource-vectors-are-strictly-positive
   (let [{:keys [parent child]} (setup)
         base {:id (random-uuid) :kind :grant
@@ -138,6 +197,23 @@
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo #"duplicate"
          (resource/transfer-tx-data spec)))))
+
+(deftest db-resolved-resource-coordinate-may-appear-only-once
+  (let [{:keys [conn parent child]} (setup)
+        commodity-eid (d/q '[:find ?e . :in $ ?symbol
+                             :where [?e :kontor.commodity/symbol ?symbol]]
+                           @conn unit)]
+    (resource/mint! conn {:id (random-uuid)
+                          :destination (resource/account-ref parent)
+                          :resources {unit 100M}})
+    (is (thrown? clojure.lang.ExceptionInfo
+                 (resource/allocate! conn
+                                     {:id (random-uuid)
+                                      :source (resource/account-ref parent)
+                                      :destination (resource/account-ref child)
+                                      :resources {unit 60M commodity-eid 60M}})))
+    (is (= {unit 100M} (resource/balance conn (resource/account-ref parent))))
+    (is (= {} (resource/balance conn (resource/account-ref child))))))
 
 (deftest governor-rejects-a-raw-resource-overdraft
   (let [{:keys [conn parent child]} (setup)]
@@ -229,6 +305,73 @@
                       (catch Throwable error error)))))))
     (is (= {} (resource/balance conn (resource/account-ref parent))))))
 
+(defn- governor-error [conn tx-data]
+  (try
+    (governance/validate-report (dc/with @conn tx-data))
+    nil
+    (catch clojure.lang.ExceptionInfo error error)))
+
+(deftest resource-authority-history-is-non-destructible
+  ;; Use an explicit temporal database: Datahike's CoW test branches currently
+  ;; lose purge capability even though their source config keeps history.
+  (let [{:keys [conn parent child]}
+        (setup-on (core/create-test-db {:keep-history? true}))
+        mint-id (random-uuid)
+        grant-id (random-uuid)
+        owned-wallet (random-uuid)]
+    (actor/register-actor! conn {:uid "wallet-owner"})
+    (resource/open-account! conn {:id owned-wallet
+                                  :owner [:kontor.actor/uid "wallet-owner"]})
+    (resource/mint! conn {:id mint-id
+                          :destination (resource/account-ref parent)
+                          :resources {unit 100M}})
+    (resource/allocate! conn {:id grant-id
+                              :source (resource/account-ref parent)
+                              :destination (resource/account-ref child)
+                              :resources {unit 100M}})
+    (let [mint-tx (:transaction (resource/receipt conn mint-id))
+          grant-tx (:transaction (resource/receipt conn grant-id))]
+      (doseq [tx-data [[[:db/purge mint-tx]]
+                       [[:db/retractEntity grant-tx]]
+                       [[:db/add grant-tx :kontor.transaction/state :cancelled]]
+                       [[:db/add grant-tx :kontor.resource-transfer/kind :mint]]
+                       [{:db/id (resource/account-ref resource/source-id)
+                         :kontor.resource-account/kind :wallet}]]]
+        (is (some? (governor-error conn tx-data))))
+      (let [report (dc/with @conn [[:db/purge mint-tx]])]
+        (is (seq (resource-validate/immutable-history-violations report)))
+        (is (= :kontor.resource/immutable-history
+               (:type (ex-data
+                       (try
+                         (resource-validate/assert-report! report)
+                         nil
+                         (catch clojure.lang.ExceptionInfo error error)))))))
+      (is (seq (resource-validate/immutable-tx-data-violations
+                @conn [[:db/purge mint-tx]])))
+      ;; Whole-entity deletion also retracts inbound refs. An owner therefore
+      ;; cannot be purged out from under an established wallet.
+      (is (seq (resource-validate/immutable-tx-data-violations
+                @conn [[:db/purge [:kontor.actor/uid "wallet-owner"]]])))
+      ;; The public gate must refuse the destructive intent. Depending on the
+      ;; Datahike preflight seam it may surface the resource error or the
+      ;; substrate's temporal-purge refusal; either way no write can commit.
+      (is (some? (deepest-cause
+                  (try
+                    (gate/transact-with-validation conn [[:db/purge mint-tx]])
+                    nil
+                    (catch Throwable error error)))))
+      (is (= :kontor.resource/immutable-history
+             (:type (ex-data
+                     (deepest-cause
+                      (try
+                        (gate/transact-with-validation
+                         conn [{:db/id resource/source-account
+                                :kontor.resource-account/kind :wallet}])
+                        nil
+                        (catch Throwable error error)))))))
+      (is (= {} (resource/balance conn (resource/account-ref parent))))
+      (is (= {unit 100M} (resource/balance conn (resource/account-ref child)))))))
+
 (deftest ordinary-financial-accounts-do-not-acquire-a-no-overdraft-policy
   (let [conn (core/create-test-db)]
     (d/transact conn
@@ -257,3 +400,13 @@
                      :kontor.posting/commodity [:kontor.commodity/symbol "USD"]
                      :kontor.posting/amount 10M :kontor.posting/display-type :product
                      :kontor.posting/posted-at #inst "2026-08-30"}]))))))
+
+(deftest aggregate-schema-alone-does-not-protect-reserved-resource-names
+  (let [conn (core/create-test-db)]
+    (d/transact conn [{:kontor.journal/code "RESOURCE"
+                       :kontor.journal/name "Ordinary pre-existing journal"
+                       :kontor.journal/type :general
+                       :kontor.journal/active true}])
+    (is (nil? (governance/validate-report
+               (dc/with @conn [{:kontor.journal/code "RESOURCE"
+                                :kontor.journal/name "Renamed"}]))))))
