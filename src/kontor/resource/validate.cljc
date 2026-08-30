@@ -180,7 +180,8 @@
    original operation or the purged datoms. Comparing facts—including their
    originating transaction id—is therefore the authoritative writer-side
    backstop and also catches purge-and-recreate attempts."
-  [{:keys [db-before db-after tx-data tx-ops]}]
+  [{:keys [db-before db-after tx-data]
+    tx-ops :datahike/tx-ops}]
   (let [removed
         (cond
           (nil? tx-ops)
@@ -191,7 +192,7 @@
           ;; ordinary cardinality-one replacement from a purge.
           (if (resource-installed? db-before)
             [{:operation :missing-tx-operation-provenance
-              :required :tx-ops}]
+              :required :datahike/tx-ops}]
             [])
 
           (some history-purge-ops tx-ops)

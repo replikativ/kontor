@@ -12,6 +12,8 @@
 
 (def unit "microUSD")
 
+(declare report-with-ops)
+
 (defn- setup-on [conn]
   (let [parent (random-uuid)
         child  (random-uuid)]
@@ -249,7 +251,7 @@
                 :destination (resource/account-ref child)
                 :resources {unit 6M}
                 :effective-date #inst "2026-08-30"})
-          report (dc/with @conn raw)
+          report (report-with-ops conn raw)
           error (try (governance/validate-report report) nil
                      (catch clojure.lang.ExceptionInfo e e))]
       (is (= :kontor.resource/insufficient
@@ -285,7 +287,7 @@
     (is (= :kontor.resource/unreceipted-posting
            (:type (ex-data
                    (try
-                     (governance/validate-report (dc/with @conn raw))
+                     (governance/validate-report (report-with-ops conn raw))
                      nil
                      (catch clojure.lang.ExceptionInfo error error))))))
     ;; The normal business-write gate rejects the same bypass before commit.
@@ -316,7 +318,7 @@
     (is (= :kontor.resource/invalid-transfer
            (:type (ex-data
                    (try
-                     (governance/validate-report (dc/with @conn draft))
+                     (governance/validate-report (report-with-ops conn draft))
                      nil
                      (catch clojure.lang.ExceptionInfo error error))))))
     (is (= :kontor.resource/invalid-transfer
@@ -328,9 +330,16 @@
                       (catch Throwable error error)))))))
     (is (= {} (resource/balance conn (resource/account-ref parent))))))
 
+(defn- report-with-ops
+  [conn tx-data]
+  ;; `datahike.core/with` is the internal resolved-report boundary used by the
+  ;; writer and therefore retains :datahike/tx-ops. Public `datahike.api/with`
+  ;; strips it before returning to callers.
+  (dc/with @conn tx-data))
+
 (defn- governor-error [conn tx-data]
   (try
-    (governance/validate-report (dc/with @conn tx-data))
+    (governance/validate-report (report-with-ops conn tx-data))
     nil
     (catch clojure.lang.ExceptionInfo error error)))
 
@@ -381,7 +390,7 @@
                          :kontor.resource-account/kind :wallet}]]]
         (is (some? (governor-error conn tx-data))))
       (let [report (dc/with @conn [[:db/purge mint-tx]])]
-        (is (contains? (:tx-ops report) :db/purge))
+        (is (contains? (:datahike/tx-ops report) :db/purge))
         (is (seq (resource-validate/immutable-history-violations report)))
         (is (= :kontor.resource/immutable-history
                (:type (ex-data
@@ -417,13 +426,14 @@
 
 (deftest ordinary-writes-do-not-scan-all-resource-history
   (let [{:keys [conn]} (setup)
-        report (dc/with @conn [{:kontor.actor/uid "unrelated-room-actor"}])
+        report (report-with-ops
+                conn [{:kontor.actor/uid "unrelated-room-actor"}])
         resource-facts-var (ns-resolve 'kontor.resource.validate
                                        'resource-facts)
         protected-eids-var (ns-resolve 'kontor.resource.validate
                                        'resource-protected-eids)
         scans (atom 0)]
-    (is (contains? (:tx-ops report) :db/add))
+    (is (contains? (:datahike/tx-ops report) :db/add))
     (with-redefs-fn
       {resource-facts-var (fn [& _]
                             (swap! scans inc)
@@ -442,9 +452,7 @@
 
 (deftest writer-governor-requires-operation-provenance
   (let [{:keys [conn]} (setup)
-        legacy-report (dissoc
-                       (dc/with @conn [{:kontor.actor/uid "legacy-writer"}])
-                       :tx-ops)
+        legacy-report (d/with @conn [{:kontor.actor/uid "legacy-writer"}])
         error (try
                 (governance/validate-report legacy-report)
                 nil
@@ -464,8 +472,8 @@
           report (dc/with @conn
                           [[:db.fn/call
                             (fn [_] [[:db/purge tx]])]])]
-      (is (contains? (:tx-ops report) :db.fn/call))
-      (is (contains? (:tx-ops report) :db/purge))
+      (is (contains? (:datahike/tx-ops report) :db.fn/call))
+      (is (contains? (:datahike/tx-ops report) :db/purge))
       (is (seq (resource-validate/immutable-history-violations report))))))
 
 (deftest ordinary-financial-accounts-do-not-acquire-a-no-overdraft-policy
@@ -518,7 +526,8 @@
                       :consumer.resource/tags :beta]]]
       (is (empty? (resource-validate/immutable-tx-data-violations
                    @conn candidate)))
-      (is (nil? (governance/validate-report (dc/with @conn candidate))))
+      (is (nil? (governance/validate-report
+                 (report-with-ops conn candidate))))
       (gate/transact-with-validation conn candidate)
       (is (= #{:alpha :beta}
              (set (:consumer.resource/tags
@@ -545,6 +554,7 @@
       ;; otherwise valid for both coordinates.
       (is (= :kontor.resource/immutable-history
              (:type (ex-data (governor-error conn extension)))))
+      (is (contains? (:datahike/tx-ops report) :db/add))
       (is (some #(= :append-to-sealed-resource (:operation %))
                 (resource-validate/immutable-history-violations report)))
       ;; The early pure gate mirrors the same sealed-receipt invariant.
@@ -634,19 +644,33 @@
                                 :resources {unit 3M}})
           ;; Bypassing Kontor's public gate and writing raw Datahike tx-data
           ;; still reaches the mandatory serialized writer contract.
-          (is (= :kontor.resource/immutable-history
-                 (:type
-                  (ex-data
-                   (deepest-cause
-                    (try
-                      @(d/transact
-                        conn
-                        (append-coordinate-tx-data
-                         (:transaction (resource/receipt conn mint-id))
-                         resource/source-account (resource/account-ref parent)
-                         "standalone-gpu" 1M #inst "2026-08-30"))
-                      nil
-                      (catch Throwable error error))))))))
+          (let [mint-tx (:transaction (resource/receipt conn mint-id))]
+            (is (= :kontor.resource/immutable-history
+                   (:type
+                    (ex-data
+                     (deepest-cause
+                      (try
+                        @(d/transact
+                          conn
+                          (append-coordinate-tx-data
+                           mint-tx resource/source-account
+                           (resource/account-ref parent)
+                           "standalone-gpu" 1M #inst "2026-08-30"))
+                        nil
+                        (catch Throwable error error)))))))
+            ;; Operation kinds expanded by a transaction function remain
+            ;; internal to the writer predicate, but still trigger the broad
+            ;; temporal audit before the public report can be returned.
+            (is (= :kontor.resource/immutable-history
+                   (:type
+                    (ex-data
+                     (deepest-cause
+                      (try
+                        @(d/transact conn
+                                     [[:db.fn/call
+                                       (fn [_] [[:db/purge mint-tx]])]])
+                        nil
+                        (catch Throwable error error)))))))))
         (resource/allocate! conn {:id (random-uuid)
                                   :source (resource/account-ref parent)
                                   :destination (resource/account-ref child)
