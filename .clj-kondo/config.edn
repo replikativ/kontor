@@ -1,0 +1,7 @@
+{:lint-as {clojure.test.check.clojure-test/defspec clojure.test/deftest
+           hive-test.mutation/deftest-mutations   clojure.test/deftest
+           hive-test.mutation/deftest-mutation-witness clojure.test/deftest}
+
+ ;; a mutation suite swaps the var under test, so it names private helpers
+ :config-in-ns {kontor.fx.consensus-provider-test
+                {:linters {:private-call {:level :off}}}}}

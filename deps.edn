@@ -152,7 +152,9 @@
                  "modules/disposal/test"     "modules/disposal/test/resources"
                  "modules/incorporation/test" "modules/incorporation/test/resources"]
    :extra-deps  {lambdaisland/kaocha     {:mvn/version "1.91.1392"}
-                 org.clojure/test.check  {:mvn/version "1.1.1"}}
+                 org.clojure/test.check  {:mvn/version "1.1.1"}
+                 ;; mutation harness; test-scoped only
+                 io.github.hive-agi/hive-test {:mvn/version "0.3.15"}}
    :main-opts   ["-m" "kaocha.runner"]}
 
   ;; REPL with test sources on the classpath + nREPL for editor wiring.

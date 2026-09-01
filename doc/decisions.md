@@ -307,7 +307,7 @@ The current set (ADR-005 → ADR-071 for tax; plus ADR-017, ADR-029, ADR-055, AD
 | `TaxPostingBuilder` | turn `TaxFacts` into balanced postings | `StaticTablePostingBuilder` |
 | `PeriodTaxProvider` | period-incident taxes (CIT / PIT / CGT / property / wealth) → `TaxReturnFacts` | jurisdiction-specific |
 | `TaxReturnPostingBuilder` | provision + payment postings from `TaxReturnFacts` | kernel-default |
-| `FxRateProvider` | spot / period-average / closing FX rates | `StaticTable`, `ECB`, `Chained` |
+| `FxRateProvider` | spot / period-average / closing FX rates | `StaticTable`, `ECB`, `Chained`, `Consensus` |
 | `CostingProvider` | inventory cost layer engine (FIFO / LIFO / WAC) | kernel built-ins |
 | `EInvoiceProvider` | EN16931 / Factur-X / PEPPOL XML emission | `PureXmlProvider` |
 | `DepreciationProvider` | depreciation schedule for a `:ledger` × `:asset` | straight-line / DDB |
@@ -318,6 +318,8 @@ The current set (ADR-005 → ADR-071 for tax; plus ADR-017, ADR-029, ADR-055, AD
 **ADR-005 is superseded by ADR-071.** The original "one `TaxProvider` for everything" split into rate-vs-posting concerns. The DisposalSource → DisposalProvider rename happened during the W3 provider-normalisation pass.
 
 Two providers stay record-shaped rather than protocol-shaped on purpose: the FxRateProvider's `query` map IS already ctx, and CostingProvider's positional `db` argument is on the "normalise next" list rather than a blocker.
+
+**`ChainedProvider` expresses precedence; `ConsensusProvider` expresses agreement.** A chain answers with the first source that has an opinion and never asks what the others thought — correct when the sources are ranked (customer override in front of a feed), wrong when they are peers and the risk is that one is *wrong* rather than absent. A commodity with no reference-rate authority has only peers: there is no ECB for XMR, just N tickers, and a stale one is indistinguishable from a live one at the protocol boundary. `consensus` polls every provider and returns the median only when at least `:min-sources` answered and the high-low spread is within `:max-spread-bps` of it; otherwise nil, which downstream means the posting does not happen. The median is the *lower* of two central values on an even count, so the rate is always one a source actually published and no rounding mode enters the money path. `:max-spread-bps` is required — no single tolerance is defensible for both a major fiat pair and a thin crypto pair. (ADR-072 Addendum 1)
 
 **Inventory value ties to the GL by construction, for every cost method.** `valuation/on-hand-value` nets `(qty×unit + Σ adjustments) − Σ (qty × unit-cost-at-consumption)` — the value the GL actually relieved, as stamped by the costing provider — rather than re-deriving consumption at each layer's own cost. Those two agree under FIFO/LIFO/FEFO and *disagree under weighted average and standard cost*, which is exactly where a subledger silently drifts from the GL. It walks all layers, not only those with stock left: under AVCO a layer drained to zero quantity can still carry residual value. Accepted consequence — under AVCO the per-layer split is an artifact of which layer was drained, and only the book-level total is meaningful (Odoo keeps no persistent per-layer cost under AVCO either). (ADR-122)
 
