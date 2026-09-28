@@ -24,10 +24,14 @@
    invoices the world created — as drafts, or sent, in which case the replay
    links them to their replayed posting and the gate gives them the parent's
    gapless `:kontor.invoice/number` (an invoice intent's footprint is
-   `[:invoice external-id]`). Anything else a world changed — a draft entry,
-   a new partner or account, an invoice paid or cancelled, a period close —
-   is refused by [[extract]] with the entities named: silently carrying it
-   over as datoms is exactly what this namespace exists to prevent."
+   `[:invoice external-id]`); bank lines it imported and its bank matches,
+   replayed as match decisions against the parent's state (footprint
+   `[:bank-line id]`); and reference data it created (partners, accounts,
+   commodities, ledgers, journals, …), replayed by identity and referred to
+   by it. Anything else a world changed — a draft entry, an invoice
+   cancelled, a period close, an outbox intent — is refused by [[extract]]
+   with the entities named: silently carrying it over as datoms is exactly
+   what this namespace exists to prevent."
   (:require [datahike.api :as d]
             [kontor.book :as book]
             [kontor.book.build :as build]
@@ -74,6 +78,20 @@
 
 (defn- valid-time-attr? [a] (= "db.valid" (namespace a)))
 
+(def ^:private catalog-identities
+  "Kinds of reference data a world may create, by their identity attribute:
+   replayed by identity (created in the parent, or recognized there), and
+   referred to by it. Document-like kinds with an identity — an outbox
+   intent, a saga step, a legal hold — are deliberately not catalog data."
+  [:kontor.partner/external-id :kontor.account/path :kontor.commodity/symbol
+   :kontor.ledger/code :kontor.analytic-account/path :kontor.payment-term/code
+   :kontor.journal/code])
+
+(defn- catalog-identity
+  "[identity-attr value] of catalog entity `e` in `db`, or nil."
+  [db e]
+  (some (fn [a] (when-let [v (a (d/entity db e))] [a v])) catalog-identities))
+
 (defn- entity-kind
   "What entity `e` is, from the attributes it has in `db`."
   [db e]
@@ -91,6 +109,7 @@
       (has "kontor.analytic-distribution") :posting-part
       (has "kontor.actor") :actor
       (contains? attrs :kontor.journal/code) :journal
+      (catalog-identity db e) :catalog
       :else :other)))
 
 (defn- existed? [db e] (boolean (seq (d/datoms db :eavt e))))
@@ -168,8 +187,15 @@
                                        {:entity e :attrs (vec (if new? unknown attrs))}))
                        nil)
                      (:posting-part :actor) (when-not new? (unsupported! "changed an existing entity" {:entity e :kind kind :attrs (vec attrs)}))
-                     :journal (when (seq (remove counter-attrs attrs))
+                     :journal (cond
+                                new? [:catalog e]
+                                (seq (remove counter-attrs attrs))
                                 (unsupported! "changed a journal" {:entity e :attrs (vec attrs)}))
+                     :catalog (if new?
+                                [:catalog e]
+                                (unsupported! "changed reference data of its base"
+                                              {:entity e :identity (catalog-identity world-db e)
+                                               :attrs (vec attrs)}))
                      (unsupported! "changed an entity of a kind it cannot replay"
                                    {:entity e :kind kind :attrs (vec attrs)}))))
                changes))))
@@ -303,6 +329,69 @@
      :applied-by applied-by
      ::payment-eid pay}))
 
+(defn- catalog-intent [world-db e]
+  (let [[a v :as identity] (catalog-identity world-db e)]
+    {:intent/id (str "catalog:" a "=" v)
+     :kind :catalog
+     :footprint #{}
+     ;; first: everything else may refer to it
+     :effective-date (java.util.Date. 0)
+     :identity identity
+     :entity (plain (d/pull world-db '[*] e) #{})}))
+
+(defn- ref-attr? [db a]
+  (= :db.type/ref (get-in (d/schema db) [a :db/valueType])))
+
+(defn- translator
+  "How an entity id of the world is named in the parent: an entity the
+   world created as reference data by its identity (a lookup ref), a
+   transaction it created by the tempid its replay gets, anything else (an
+   entity of the base) as it is."
+  [world-db catalog txs]
+  (let [m (merge (into {} (map (fn [e] [e (catalog-identity world-db e)])) catalog)
+                 (into {} (map (fn [e] [e (str "settle-" (:kontor.transaction/origin-id
+                                                          (d/entity world-db e)))]))
+                       txs))]
+    (fn [x] (if (integer? x) (get m x x) x))))
+
+(defn- translate-map
+  "`m` (an entity map) with the entity ids in its ref attributes translated."
+  [world-db tr m]
+  (into {} (map (fn [[k v]]
+                  [k (if (ref-attr? world-db k)
+                       (if (coll? v) (mapv tr v) (tr v))
+                       v)]))
+        m))
+
+(defn- update-some [m k f] (if (some? (get m k)) (update m k f) m))
+
+(defn- translate
+  [world-db tr {:keys [kind] :as i}]
+  (case kind
+    :entry
+    (update i :entry
+            (fn [en]
+              (-> en
+                  (update :journal tr)
+                  (update-some :partner tr)
+                  (update-some :settles #(mapv tr %))
+                  (update :postings
+                          (fn [ps]
+                            (mapv (fn [p]
+                                    (reduce #(update-some %1 %2 tr)
+                                            (update-some p :analytic-distributions
+                                                         (fn [ds] (mapv #(-> % (update-some :plan tr)
+                                                                             (update-some :account tr))
+                                                                        ds)))
+                                            [:account :commodity :partner :entity :ledger]))
+                                  ps))))))
+    :invoice (-> i
+                 (update :invoice #(translate-map world-db tr %))
+                 (update :lines (fn [ls] (mapv #(translate-map world-db tr %) ls))))
+    :import (update i :line #(translate-map world-db tr %))
+    :match (-> i (update :journal tr) (update :contra tr) (update :applied-by tr))
+    :catalog (update i :entity #(translate-map world-db tr %))))
+
 (declare referenced-entry-eids)
 
 (defn- referenced-eids
@@ -314,6 +403,7 @@
     :import (ref-values (dissoc line :kontor.bank-line/amount :kontor.bank-line/date
                                 :kontor.bank-line/value-date))
     :match (remove nil? (concat [journal contra applied-by] (keep :eid settles)))
+    :catalog []
     (referenced-entry-eids entry reverses)))
 
 (defn- referenced-entry-eids
@@ -360,16 +450,20 @@
                                      (when (contains? in-world reverses)
                                        [reverses (::world-eid i)]))
                                    intents))
-        kept (concat (remove #(contains? self-reversed (::world-eid %)) intents)
+        catalog (ids-of grouped :catalog)
+        tr (translator world-db catalog txs)
+        kept (concat (map #(catalog-intent world-db %) catalog)
+                     (remove #(contains? self-reversed (::world-eid %)) intents)
                      (map #(invoice-intent world-db %) (ids-of grouped :invoices))
                      (map #(import-intent world-db %) (remove #(existed? base-db %) lines))
-                     matches)]
-    (doseq [i kept
+                     matches)
+        translated (mapv #(translate world-db tr %) kept)]
+    (doseq [i translated
             e (referenced-eids i)
             :when (not (existed? base-db e))]
-      (throw (ex-info "kontor.settlement: an entry refers to an entity the world created"
+      (throw (ex-info "kontor.settlement: an intent refers to an entity the world created and this settlement cannot name"
                       {:type ::new-reference :entity e :intent (:intent/id i)})))
-    (vec (sort-by (juxt :effective-date #(str (:intent/id %))) kept))))
+    (vec (sort-by (juxt :effective-date #(str (:intent/id %))) translated))))
 
 (defn parent-claims
   "The footprint keys the parent claimed since `base-db`: its own entries'
@@ -431,7 +525,7 @@
     (fn [{:intent/keys [id] :keys [kind entry reverses actor] :as i}]
       (case kind
         :invoice (invoice-tx-data db i)
-        (:import :match) nil
+        (:import :match :catalog) nil
         (when-not (d/entity db [:kontor.transaction/origin-id id])
           (let [tempid (str "settle-" id)
                 input (assoc (build/build-input entry) :tx-tempid tempid)
@@ -445,14 +539,65 @@
                   tx-data)))))
     intents)))
 
-(defn- import-tx-data
-  "Bank lines the world imported that the book does not hold yet."
+(defn- entid
+  "The entity id `x` names in `db` — an id, or a lookup ref — or nil when
+   nothing has that identity."
+  [db x]
+  (cond (integer? x) x
+        (vector? x) (d/q '[:find ?e . :in $ ?a ?v :where [?e ?a ?v]] db (first x) (second x))
+        :else nil))
+
+(defn- same-as-parent!
+  "Refuse when the parent already holds catalog entity `identity` with other
+   attributes than the world gave it: two worlds' customers, say, under one
+   id. The same attributes are the same entity."
+  [db [a :as identity] entity]
+  (let [eid (entid db identity)
+        differs (for [[k wv] (dissoc entity a)
+                      :let [pv (get (d/pull db [k] eid) k)
+                            pv (if (ref-attr? db k)
+                                 (if (sequential? pv) (set (map :db/id pv)) (:db/id pv))
+                                 pv)
+                            wv (if (ref-attr? db k)
+                                 (if (and (sequential? wv) (not (keyword? (first wv)))) (set (map #(entid db %) wv)) (entid db wv))
+                                 wv)]
+                      :when (not= pv wv)]
+                  {:attr k :world wv :parent pv})]
+    (when (seq differs)
+      (throw (ex-info (str "kontor.settlement: the parent holds " (pr-str identity)
+                           " with other attributes than the world gave it")
+                      {:type ::conflicting-entity :identity identity :differs (vec differs)})))))
+
+(defn- phase-1-tx-data
+  "The reference data the world created and the bank lines it imported,
+   that the book does not hold yet. Within this transaction a new entity is
+   named by its tempid; in the later ones by its identity."
   [db intents]
-  (vec (for [{:keys [kind line]} intents
-             :when (and (= :import kind)
-                        (not (d/entity db [:kontor.bank-line/external-id
-                                           (:kontor.bank-line/external-id line)])))]
-         line)))
+  (let [catalog (filter #(= :catalog (:kind %)) intents)
+        fresh (remove (fn [{:keys [identity entity]}]
+                        (when (entid db identity)
+                          (same-as-parent! db identity entity)
+                          true))
+                      catalog)
+        tempids (into {} (map (fn [{:keys [identity]}]
+                                [identity (str "catalog-" (first identity) "=" (second identity))]))
+                      fresh)
+        name-of (fn [x] (get tempids x x))
+        named (fn [m] (into {} (map (fn [[k v]]
+                                      [k (if (ref-attr? db k)
+                                           (if (sequential? v)
+                                             (if (vector? (first v)) (mapv name-of v) (name-of v))
+                                             v)
+                                           v)]))
+                            m))]
+    (vec (concat
+          (for [{:keys [identity entity]} fresh]
+            (assoc (named entity) :db/id (tempids identity)))
+          (for [{:keys [kind line]} intents
+                :when (and (= :import kind)
+                           (not (d/entity db [:kontor.bank-line/external-id
+                                              (:kontor.bank-line/external-id line)])))]
+            (named line))))))
 
 (defn- match-tx-data
   "The replayed match `m` against `db`, or nil when the book already holds
@@ -478,7 +623,10 @@
 
 (defn stamp!
   "Re-post `intents` into `conn`'s book through the gate, in three steps:
-   the bank lines the world imported; its entries and invoices, as ONE
+   the reference data the world created (partners, accounts, … — one the
+   parent already holds with other attributes refuses the settlement,
+   `::conflicting-entity`) and the bank lines it imported; its entries and
+   invoices, as ONE
    transaction — the parent numbers them consecutively, and a refused
    intent (a locked period, a closed sequence bucket) refuses them all; then
    its bank matches, each re-run against the parent's state. Every step
@@ -487,9 +635,9 @@
    Returns {world-number parent-number} for what carried a rendered number
    in the world."
   [conn intents]
-  (let [imports (import-tx-data (d/db conn) intents)]
-    (when (seq imports)
-      (gate/transact-with-validation conn imports)))
+  (let [phase-1 (phase-1-tx-data (d/db conn) intents)]
+    (when (seq phase-1)
+      (gate/transact-with-validation conn phase-1)))
   (let [tx-data (stamp-tx-data (d/db conn) intents)]
     (when (seq tx-data)
       (gate/transact-with-validation conn tx-data)))

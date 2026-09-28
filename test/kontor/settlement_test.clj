@@ -102,21 +102,56 @@
           "the same bank line matched in the parent meanwhile: a conflict for review"))))
 
 (deftest what-cannot-be-replayed-is-refused
-  (testing "a new account"
+  (testing "an outbox intent (external effects leave only from the root)"
     (let [conn (fresh-book)
           base (d/db conn)
           w (world-of conn)]
-      (d/transact w [{:kontor.account/path "Income:Other" :kontor.account/type :income}])
+      (d/transact w [{:kontor.side-effect-intent/key "mail-1"}])
       (is (= ::st/unsupported
              (try (st/extract base (d/db w)) nil
-                  (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))))))
-  (testing "an entry on an account the world created"
+                  (catch clojure.lang.ExceptionInfo e (:type (ex-data e)))))))))
+
+(deftest reference-data-a-world-created-is-replayed-by-identity
+  (let [conn (fresh-book)
+        base (d/db conn)
+        w (world-of conn)
+        consulting [:kontor.account/path "Income:Consulting"]]
+    (d/transact w [{:kontor.partner/external-id "NEWCO" :kontor.partner/name "NewCo GmbH"}
+                   {:kontor.account/path "Income:Consulting" :kontor.account/type :income}])
+    (book/sell! w {:debit-account ar :credit-account consulting :amount 500 :commodity eur
+                   :effective-date #inst "2026-03-05" :partner [:kontor.partner/external-id "NEWCO"]})
+    (let [intents (st/extract base (d/db w))]
+      (is (= #{:catalog :entry} (set (map :kind intents))))
+      (st/stamp! conn intents)
+      (let [db (d/db conn)
+            t (d/q '[:find ?t . :where [?t :kontor.transaction/partner ?p]
+                     [?p :kontor.partner/external-id "NEWCO"]] db)]
+        (is (= "NewCo GmbH" (:kontor.partner/name (d/entity db [:kontor.partner/external-id "NEWCO"]))))
+        (is (some? t) "the entry refers to the replayed partner")
+        (is (= -500M (:amount (first (vals (balance/account-balance conn consulting))))))))))
+
+(deftest the-same-reference-data-on-both-sides
+  (testing "identical: it is the same entity"
     (let [conn (fresh-book)
           base (d/db conn)
           w (world-of conn)]
-      (d/transact w [{:kontor.account/path "Income:Other" :kontor.account/type :income}])
-      (is (thrown? clojure.lang.ExceptionInfo
-                   (st/extract base (d/db w)))))))
+      (d/transact w [{:kontor.partner/external-id "NEWCO" :kontor.partner/name "NewCo GmbH"}])
+      (d/transact conn [{:kontor.partner/external-id "NEWCO" :kontor.partner/name "NewCo GmbH"}])
+      (st/stamp! conn (st/extract base (d/db w)))
+      (is (= 1 (count (d/q '[:find [?p ...] :where [?p :kontor.partner/external-id "NEWCO"]] (d/db conn)))))))
+  (testing "different: the settlement is refused and books nothing"
+    (let [conn (fresh-book)
+          base (d/db conn)
+          w (world-of conn)]
+      (d/transact w [{:kontor.partner/external-id "NEWCO" :kontor.partner/name "NewCo GmbH"}])
+      (book/sell! w {:debit-account ar :credit-account rev :amount 10 :commodity eur
+                     :effective-date #inst "2026-03-05" :partner [:kontor.partner/external-id "NEWCO"]})
+      (d/transact conn [{:kontor.partner/external-id "NEWCO" :kontor.partner/name "Other NewCo AG"}])
+      (let [e (try (st/stamp! conn (st/extract base (d/db w))) nil
+                   (catch clojure.lang.ExceptionInfo e (ex-data e)))]
+        (is (= ::st/conflicting-entity (:type e)))
+        (is (= [:kontor.partner/external-id "NEWCO"] (:identity e))))
+      (is (= [] (numbers (d/db conn)))))))
 
 (deftest a-refused-intent-refuses-the-settlement
   (let [conn (fresh-book)
