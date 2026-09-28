@@ -511,6 +511,17 @@
              {}
              reversible-posting-options))
 
+(defn entry-postings
+  "The `:postings` options that re-create the legs of transaction `eid`
+   exactly — the reversal mirror (ADR-170) without the sign flip, so a
+   replay carries every option a reversal would (ADR-172)."
+  [db eid]
+  (mapv #(update (reverse-posting %) :amount money/negate-amount)
+        (mapv #(d/pull db reversible-posting-pull %)
+              (sort (d/q '[:find [?p ...] :in $ ?t
+                           :where [?p :kontor.posting/transaction ?t]]
+                         db eid)))))
+
 (def reverse-option-keys
   "Every option [[reverse-tx-data]] understands. Strict for the same reason
    `kontor.book.build/entry-option-keys` is (ADR-124): a mistyped

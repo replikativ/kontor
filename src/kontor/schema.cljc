@@ -2752,6 +2752,16 @@
     :db/doc         "Stable caller-supplied id (\"INV-2026-0001\",
                      a beleg :kontor.invoice/id stringified, etc.). Identity."}
 
+   {:db/ident       :kontor.transaction/origin-id
+    :db/valueType   :db.type/uuid
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Where this entry first came into being (ADR-172): a uuid
+                     the gate assigns the first time an entry is sealed, and
+                     that a replay into a parent world carries along. A
+                     settlement skips an entry whose origin the book already
+                     holds, so replaying a world twice books nothing twice."}
+
    {:db/ident       :kontor.transaction/journal
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}

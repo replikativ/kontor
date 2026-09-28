@@ -221,6 +221,24 @@
 ;; Validating transact
 ;; ============================================================================
 
+(defn- assign-origins
+  "ADR-172 — a sealed transaction that enters the book without an origin gets
+   one, once: the uuid a replay into a parent world carries along, so the
+   parent can tell an entry it already holds. An existing entity (a draft
+   being sealed) keeps the origin it has."
+  [txdb tx-data]
+  (mapv (fn [form]
+          (if (and (map? form)
+                   (contains? form :kontor.transaction/posted-at)
+                   (contains? form :kontor.transaction/journal)
+                   (not (contains? form :kontor.transaction/origin-id))
+                   (not (let [id (:db/id form)]
+                          (and (integer? id) (pos? id)
+                               (:kontor.transaction/origin-id (d/entity txdb id))))))
+            (assoc form :kontor.transaction/origin-id (random-uuid))
+            form))
+        tx-data))
+
 (defn validate-and-apply
   "Transactor function. Runs structural validators against the
    speculative `txdb` + the user's original `tx-data`; returns the tx-data
@@ -281,7 +299,7 @@
     ;; ADR-151 — allocate gapless legal numbers, atomically with the entry.
     ;; LAST for the same reason: allocation is the only step with a durable
     ;; side effect on the journal counter.
-    (numbering/allocate txdb tx-data)))
+    (numbering/allocate txdb (assign-origins txdb tx-data))))
 
 (defn pg-tx-wrap
   "Build the `:tx-wrap` fn pg-datahike's `make-query-handler` accepts.
