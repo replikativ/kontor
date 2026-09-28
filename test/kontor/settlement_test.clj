@@ -168,3 +168,45 @@
     (is (thrown? clojure.lang.ExceptionInfo (st/stamp! conn (st/extract base (d/db w))))
         "an entry dated into a closed period is not re-dated: the settlement fails")
     (is (= [] (numbers (d/db conn))) "and nothing of it is booked")))
+
+(defn- march [conn]
+  (-> (d/transact conn [{:db/id -1 :kontor.period/start #inst "2026-03-01"
+                         :kontor.period/end #inst "2026-04-01"}])
+      :tempids (get -1)))
+
+(deftest a-period-close-replays-last-against-the-parent
+  (let [conn (fresh-book)
+        p (march conn)
+        base (d/db conn)
+        w (world-of conn)]
+    (sell! w 80 #inst "2026-03-10")
+    (period/close! w p)
+    ;; the parent books into March meanwhile; it is still open there
+    (sell! conn 20 #inst "2026-03-11")
+    (let [intents (st/extract base (d/db w))]
+      (is (= #{:entry :period} (set (map :kind intents))))
+      (st/stamp! conn intents)
+      (is (some? (:kontor.period/locked-at (d/entity (d/db conn) p)))
+          "closed after the world's entry was booked")
+      (is (= 100M (ar-balance conn)))
+      (testing "an entry into it afterwards is refused by the parent's lock"
+        (is (thrown? clojure.lang.ExceptionInfo (sell! conn 5 #inst "2026-03-12")))))))
+
+(deftest a-period-both-sides-closed-stays-closed
+  (let [conn (fresh-book)
+        p (march conn)
+        base (d/db conn)
+        w (world-of conn)]
+    (period/close! w p)
+    (period/close! conn p)
+    (st/stamp! conn (st/extract base (d/db w)))
+    (is (some? (:kontor.period/locked-at (d/entity (d/db conn) p))))))
+
+(deftest a-new-period-is-refused
+  (let [conn (fresh-book)
+        base (d/db conn)
+        w (world-of conn)]
+    (march w)
+    (is (= ::st/unsupported
+           (try (st/extract base (d/db w)) nil
+                (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))))))

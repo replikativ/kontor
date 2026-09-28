@@ -36,6 +36,7 @@
             [kontor.book :as book]
             [kontor.book.build :as build]
             [kontor.banking.reconciliation :as recon]
+            [kontor.compliance.period :as period]
             [kontor.document.invoice :as invoice]
             [kontor.workflow.status-machine :as sm]
             [kontor.gate :as gate]
@@ -108,6 +109,7 @@
       (has "kontor.posting-dimension") :posting-part
       (has "kontor.analytic-distribution") :posting-part
       (has "kontor.actor") :actor
+      (has "kontor.period") :period
       (contains? attrs :kontor.journal/code) :journal
       (catalog-identity db e) :catalog
       :else :other)))
@@ -191,6 +193,14 @@
                                 new? [:catalog e]
                                 (seq (remove counter-attrs attrs))
                                 (unsupported! "changed a journal" {:entity e :attrs (vec attrs)}))
+                     :period
+                     (if (and (not new?)
+                              (every? #{:kontor.period/locked-at :kontor.period/lock-tx
+                                        :kontor.period/sealed-at :kontor.period/sealed-by}
+                                      attrs))
+                       [:periods e]
+                       (unsupported! (if new? "created a period" "changed a period beyond closing it")
+                                     {:entity e :attrs (vec attrs)}))
                      :catalog (if new?
                                 [:catalog e]
                                 (unsupported! "changed reference data of its base"
@@ -390,7 +400,29 @@
                  (update :lines (fn [ls] (mapv #(translate-map world-db tr %) ls))))
     :import (update i :line #(translate-map world-db tr %))
     :match (-> i (update :journal tr) (update :contra tr) (update :applied-by tr))
-    :catalog (update i :entity #(translate-map world-db tr %))))
+    :catalog (update i :entity #(translate-map world-db tr %))
+    :period (update-some i :sealed-by tr)))
+
+(defn- period-intent
+  "A period the world closed or sealed, as that decision: re-run in the
+   parent last, against its state — its own pre-close checks, its own
+   sealing order. A period the parent already closed (sealed) is left as it
+   is: both decided the same."
+  [base-db world-db e]
+  (let [w (d/pull world-db [:kontor.period/locked-at :kontor.period/sealed-at
+                            {:kontor.period/sealed-by [:db/id]}]
+                  e)
+        b (d/pull base-db [:kontor.period/locked-at :kontor.period/sealed-at] e)]
+    {:intent/id (str "period:" e)
+     :kind :period
+     :footprint #{[:period e]}
+     :effective-date (or (:kontor.period/sealed-at w) (:kontor.period/locked-at w))
+     :period e
+     :close-at (when (and (:kontor.period/locked-at w) (not (:kontor.period/locked-at b)))
+                 (:kontor.period/locked-at w))
+     :seal-at (when (and (:kontor.period/sealed-at w) (not (:kontor.period/sealed-at b)))
+                (:kontor.period/sealed-at w))
+     :sealed-by (ref-id (:kontor.period/sealed-by w))}))
 
 (declare referenced-entry-eids)
 
@@ -403,6 +435,7 @@
     :import (ref-values (dissoc line :kontor.bank-line/amount :kontor.bank-line/date
                                 :kontor.bank-line/value-date))
     :match (remove nil? (concat [journal contra applied-by] (keep :eid settles)))
+    :period []
     :catalog []
     (referenced-entry-eids entry reverses)))
 
@@ -456,7 +489,8 @@
                      (remove #(contains? self-reversed (::world-eid %)) intents)
                      (map #(invoice-intent world-db %) (ids-of grouped :invoices))
                      (map #(import-intent world-db %) (remove #(existed? base-db %) lines))
-                     matches)
+                     matches
+                     (map #(period-intent base-db world-db %) (ids-of grouped :periods)))
         translated (mapv #(translate world-db tr %) kept)]
     (doseq [i translated
             e (referenced-eids i)
@@ -525,7 +559,7 @@
     (fn [{:intent/keys [id] :keys [kind entry reverses actor] :as i}]
       (case kind
         :invoice (invoice-tx-data db i)
-        (:import :match :catalog) nil
+        (:import :match :catalog :period) nil
         (when-not (d/entity db [:kontor.transaction/origin-id id])
           (let [tempid (str "settle-" id)
                 input (assoc (build/build-input entry) :tx-tempid tempid)
@@ -646,6 +680,15 @@
           :let [tx-data (match-tx-data (d/db conn) m)]
           :when tx-data]
     (gate/transact-with-validation conn tx-data))
+  (doseq [{:keys [period close-at seal-at sealed-by]} (sort-by :effective-date
+                                                               (filter #(= :period (:kind %)) intents))]
+    (let [locked? #(:kontor.period/locked-at (d/entity (d/db conn) period))]
+      (when (and close-at (not (locked?)))
+        (period/close! conn period {:at close-at}))
+      (when (and seal-at (not (:kontor.period/sealed-at (d/entity (d/db conn) period))))
+        (gate/transact-with-validation
+         conn (period/seal-tx-data (d/db conn) period
+                                   (cond-> {:at seal-at} sealed-by (assoc :sealed-by sealed-by)))))))
   (let [db (d/db conn)]
     (into {}
           (keep (fn [{:intent/keys [id] :keys [kind world-number invoice]}]
