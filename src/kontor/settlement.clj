@@ -20,14 +20,19 @@
       :actor          uid of who sealed it, or nil
       :world-number   the number it carried in the world, or nil}
 
-   This slice replays posted journal entries (any `kontor.book` verb) and
-   reversals. Anything else a world changed — a draft, an invoice, a new
-   partner or account, a period close — is refused by [[extract]] with the
-   entities named: silently carrying it over as datoms is exactly what this
-   namespace exists to prevent."
+   Replayed: posted journal entries (any `kontor.book` verb), reversals, and
+   invoices the world created — as drafts, or sent, in which case the replay
+   links them to their replayed posting and the gate gives them the parent's
+   gapless `:kontor.invoice/number` (an invoice intent's footprint is
+   `[:invoice external-id]`). Anything else a world changed — a draft entry,
+   a new partner or account, an invoice paid or cancelled, a period close —
+   is refused by [[extract]] with the entities named: silently carrying it
+   over as datoms is exactly what this namespace exists to prevent."
   (:require [datahike.api :as d]
             [kontor.book :as book]
             [kontor.book.build :as build]
+            [kontor.document.invoice :as invoice]
+            [kontor.workflow.status-machine :as sm]
             [kontor.gate :as gate]
             [kontor.numbering :as numbering]
             [kontor.posting.build :as posting-build]))
@@ -75,6 +80,9 @@
         has (fn [ns] (some #(= ns (namespace %)) attrs))]
     (cond
       (contains? attrs :kontor.transaction/journal) :transaction
+      (contains? attrs :kontor.invoice/external-id) :invoice
+      (has "kontor.invoice-line") :invoice-line
+      (has "kontor.status-history") :status-history
       (contains? attrs :kontor.posting/transaction) :posting
       (has "kontor.posting-dimension") :posting-part
       (has "kontor.analytic-distribution") :posting-part
@@ -100,39 +108,54 @@
           {}
           (world-datoms base-db world-db)))
 
+(def ^:private replayed-invoice-statuses #{:draft :sent})
+
 (defn- check-changes!
-  "Refuse any change this slice does not replay. Returns the ids of the
-   new transactions."
+  "Refuse any change this slice does not replay. Returns {:transactions
+   [eid] :invoices [eid]}, the new ones."
   [base-db world-db changes]
   (let [counter-attrs #{:kontor.journal/last-sequence :kontor.journal/last-sequence-key}]
-    (vec
-     (keep
-      (fn [[e attrs]]
-        (let [kind (entity-kind world-db e)
-              new? (not (existed? base-db e))
-              attrs (remove valid-time-attr? attrs)]
-          (case kind
-            :transaction
-            (let [unknown (remove carried-transaction-attrs attrs)
-                  t (d/pull world-db [:kontor.transaction/posted-at] e)]
-              (cond
-                (not new?) (unsupported! "changed an entry of its base" {:entity e :attrs (vec attrs)})
-                (seq unknown) (unsupported! "wrote transaction attributes a replay does not carry"
-                                            {:entity e :attrs (vec unknown)})
-                (not (:kontor.transaction/posted-at t)) (unsupported! "holds a draft entry" {:entity e})
-                :else e))
-            :posting
-            (let [unknown (remove carried-posting-attrs attrs)]
-              (when (or (not new?) (seq unknown))
-                (unsupported! "wrote posting attributes a replay does not carry"
-                              {:entity e :attrs (vec (if new? unknown attrs))}))
-              nil)
-            (:posting-part :actor) (when-not new? (unsupported! "changed an existing entity" {:entity e :kind kind :attrs (vec attrs)}))
-            :journal (when (seq (remove counter-attrs attrs))
-                       (unsupported! "changed a journal" {:entity e :attrs (vec attrs)}))
-            (unsupported! "changed an entity of a kind it cannot replay"
-                          {:entity e :kind kind :attrs (vec attrs)}))))
-      changes))))
+    (group-by first
+              (keep
+               (fn [[e attrs]]
+                 (let [kind (entity-kind world-db e)
+                       new? (not (existed? base-db e))
+                       attrs (remove valid-time-attr? attrs)]
+                   (case kind
+                     :transaction
+                     (let [unknown (remove carried-transaction-attrs attrs)
+                           t (d/pull world-db [:kontor.transaction/posted-at] e)]
+                       (cond
+                         (not new?) (unsupported! "changed an entry of its base" {:entity e :attrs (vec attrs)})
+                         (seq unknown) (unsupported! "wrote transaction attributes a replay does not carry"
+                                                     {:entity e :attrs (vec unknown)})
+                         (not (:kontor.transaction/posted-at t)) (unsupported! "holds a draft entry" {:entity e})
+                         :else [:transactions e]))
+                     :invoice
+                     (let [status (:kontor.invoice/status (d/pull world-db [:kontor.invoice/status] e))]
+                       (cond
+                         (not new?) (unsupported! "changed an invoice of its base" {:entity e :attrs (vec attrs)})
+                         (not (replayed-invoice-statuses status))
+                         (unsupported! "holds an invoice in a status this settlement cannot replay"
+                                       {:entity e :status status})
+                         :else [:invoices e]))
+                     :invoice-line (when-not new? (unsupported! "changed an invoice line of its base" {:entity e :attrs (vec attrs)}))
+            ;; regenerated by the replay's own status changes
+                     :status-history (when-not new? (unsupported! "changed a status history row" {:entity e}))
+                     :posting
+                     (let [unknown (remove carried-posting-attrs attrs)]
+                       (when (or (not new?) (seq unknown))
+                         (unsupported! "wrote posting attributes a replay does not carry"
+                                       {:entity e :attrs (vec (if new? unknown attrs))}))
+                       nil)
+                     (:posting-part :actor) (when-not new? (unsupported! "changed an existing entity" {:entity e :kind kind :attrs (vec attrs)}))
+                     :journal (when (seq (remove counter-attrs attrs))
+                                (unsupported! "changed a journal" {:entity e :attrs (vec attrs)}))
+                     (unsupported! "changed an entity of a kind it cannot replay"
+                                   {:entity e :kind kind :attrs (vec attrs)}))))
+               changes))))
+
+(defn- ids-of [grouped k] (mapv second (get grouped k)))
 
 ;; ============================================================================
 ;; Intents
@@ -165,6 +188,7 @@
                 (assoc :settles (mapv ref-id (:kontor.transaction/settles t))))
         origin (:kontor.transaction/origin-id t)]
     {:intent/id origin
+     :kind :entry
      :footprint (cond-> #{[:origin origin]}
                   caller-id (conj [:external-id caller-id])
                   reverses (conj [:reverses reverses]))
@@ -175,9 +199,49 @@
      :world-number rendered
      ::world-eid e}))
 
+(defn- plain
+  "A pulled entity as data for re-creation: refs as eids, without the
+   attributes in `drop`."
+  [m drop]
+  (into {} (keep (fn [[k v]]
+                   (when-not (contains? drop k)
+                     [k (cond (map? v) (:db/id v)
+                              (and (coll? v) (map? (first v))) (mapv :db/id v)
+                              :else v)])))
+        (dissoc m :db/id)))
+
+(defn- invoice-intent
+  [world-db e]
+  (let [inv (d/pull world-db '[* {:kontor.invoice/lines [*]}] e)
+        ext (:kontor.invoice/external-id inv)
+        origin (some->> (:kontor.invoice/transaction inv) ref-id
+                        (d/entity world-db) :kontor.transaction/origin-id)]
+    {:intent/id (str "invoice:" ext)
+     :kind :invoice
+     :footprint #{[:invoice ext]}
+     :effective-date (:kontor.invoice/issue-date inv)
+     :invoice (plain inv #{:kontor.invoice/lines :kontor.invoice/transaction
+                           :kontor.invoice/status :kontor.invoice/number})
+     :lines (mapv #(plain % #{:kontor.invoice-line/invoice})
+                  (sort-by :kontor.invoice-line/sequence (:kontor.invoice/lines inv)))
+     :status (:kontor.invoice/status inv)
+     :transaction-origin origin
+     :world-number (:kontor.invoice/number inv)}))
+
+(defn- ref-values [m] (filter integer? (mapcat #(if (coll? %) % [%]) (vals m))))
+
+(declare referenced-entry-eids)
+
 (defn- referenced-eids
-  "Every entity id an intent's entry refers to."
-  [{:keys [entry reverses]}]
+  "Every entity id an intent refers to."
+  [{:keys [kind entry reverses invoice lines]}]
+  (if (= :invoice kind)
+    (distinct (concat (remove #{(:kontor.invoice/issue-date invoice)} (ref-values invoice))
+                      (mapcat ref-values lines)))
+    (referenced-entry-eids entry reverses)))
+
+(defn- referenced-entry-eids
+  [entry reverses]
   (->> (concat [(:journal entry) (:partner entry) reverses]
                (:settles entry)
                (mapcat (fn [p] (concat [(:account p) (:commodity p) (:partner p)
@@ -195,14 +259,16 @@
    else it changed, and `::new-reference` when an entry refers to an entity
    the world created (this slice replays against the base's entities)."
   [base-db world-db]
-  (let [txs (check-changes! base-db world-db (changed-entities base-db world-db))
+  (let [grouped (check-changes! base-db world-db (changed-entities base-db world-db))
+        txs (ids-of grouped :transactions)
         intents (mapv #(intent world-db %) txs)
         in-world (set txs)
         self-reversed (set (mapcat (fn [{:keys [reverses] :as i}]
                                      (when (contains? in-world reverses)
                                        [reverses (::world-eid i)]))
                                    intents))
-        kept (remove #(contains? self-reversed (::world-eid %)) intents)]
+        kept (concat (remove #(contains? self-reversed (::world-eid %)) intents)
+                     (map #(invoice-intent world-db %) (ids-of grouped :invoices)))]
     (doseq [i kept
             e (referenced-eids i)
             :when (not (existed? base-db e))]
@@ -218,8 +284,11 @@
   (let [since (:max-tx base-db)
         txs (d/q '[:find [?t ...] :in $ ?since
                    :where [?t :kontor.transaction/posted-at _ ?tx] [(> ?tx ?since)]]
-                 parent-db since)]
-    (into #{}
+                 parent-db since)
+        invoices (d/q '[:find [?x ...] :in $ ?since
+                        :where [?i :kontor.invoice/external-id ?x ?tx] [(> ?tx ?since)]]
+                      parent-db since)]
+    (into (set (map (fn [x] [:invoice x]) invoices))
           (mapcat (fn [e]
                     (let [t (d/pull parent-db '[*] e)
                           caller-id (when-not (world-number parent-db t)
@@ -235,6 +304,23 @@
 ;; Stamping into the parent
 ;; ============================================================================
 
+(defn- invoice-tx-data
+  "Re-create an invoice the world created, as a draft, and — when the world
+   sent it — link it to its replayed posting (the gate then numbers it) and
+   record the draft → sent transition."
+  [db {:keys [invoice lines status transaction-origin]}]
+  (let [ext (:kontor.invoice/external-id invoice)]
+    (when-not (d/entity db [:kontor.invoice/external-id ext])
+      (let [created (invoice/create-tx-data db (assoc invoice :kontor.invoice/lines lines))
+            tempid (str "invoice-" ext)]
+        (if (= :sent status)
+          (-> created
+              (conj {:db/id tempid :kontor.invoice/transaction (str "settle-" transaction-origin)})
+              (into (sm/record-status-change-tx-data
+                     db {:entity tempid :entity-type :invoice
+                         :facet :kontor.invoice/status :from :draft :to :sent})))
+          created)))))
+
 (defn stamp-tx-data
   "Pure-over-`db` tx-data that re-posts `intents` (in order) into the book
    `db` belongs to, skipping those whose origin it already holds. Each
@@ -242,18 +328,20 @@
   [db intents]
   (vec
    (mapcat
-    (fn [{:intent/keys [id] :keys [entry reverses actor]}]
-      (when-not (d/entity db [:kontor.transaction/origin-id id])
-        (let [tempid (str "settle-" id)
-              input (assoc (build/build-input entry) :tx-tempid tempid)
-              tx-data (posting-build/post-transaction-tx-data
-                       input (cond-> {} actor (assoc :actor actor)))]
-          (mapv (fn [form]
-                  (if (and (map? form) (= tempid (:db/id form)))
-                    (cond-> (assoc form :kontor.transaction/origin-id id)
-                      reverses (assoc :kontor.transaction/reverses reverses))
-                    form))
-                tx-data))))
+    (fn [{:intent/keys [id] :keys [kind entry reverses actor] :as i}]
+      (if (= :invoice kind)
+        (invoice-tx-data db i)
+        (when-not (d/entity db [:kontor.transaction/origin-id id])
+          (let [tempid (str "settle-" id)
+                input (assoc (build/build-input entry) :tx-tempid tempid)
+                tx-data (posting-build/post-transaction-tx-data
+                         input (cond-> {} actor (assoc :actor actor)))]
+            (mapv (fn [form]
+                    (if (and (map? form) (= tempid (:db/id form)))
+                      (cond-> (assoc form :kontor.transaction/origin-id id)
+                        reverses (assoc :kontor.transaction/reverses reverses))
+                      form))
+                  tx-data)))))
     intents)))
 
 (defn stamp!
@@ -269,8 +357,12 @@
       (gate/transact-with-validation conn tx-data))
     (let [db (d/db conn)]
       (into {}
-            (keep (fn [{:intent/keys [id] :keys [world-number]}]
+            (keep (fn [{:intent/keys [id] :keys [kind world-number invoice]}]
                     (when world-number
-                      [world-number (:kontor.transaction/external-id
-                                     (d/entity db [:kontor.transaction/origin-id id]))])))
+                      [world-number
+                       (if (= :invoice kind)
+                         (:kontor.invoice/number
+                          (d/entity db [:kontor.invoice/external-id (:kontor.invoice/external-id invoice)]))
+                         (:kontor.transaction/external-id
+                          (d/entity db [:kontor.transaction/origin-id id])))])))
             intents))))

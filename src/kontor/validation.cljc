@@ -239,6 +239,33 @@
             form))
         tx-data))
 
+(defn- assign-invoice-numbers
+  "ADR-172 — an invoice sent in this transaction takes the gapless number its
+   posting was allocated, rendered from the journal's template, as its legal
+   `:kontor.invoice/number`. The caller's `:kontor.invoice/external-id` stays
+   its identity. Runs after [[numbering/allocate]], which put the ordinal on
+   the transaction map."
+  [txdb tx-data]
+  (let [numbered (into {}
+                       (keep (fn [f]
+                               (when (and (map? f) (:kontor.transaction/sequence-number f))
+                                 [(:db/id f) f])))
+                       tx-data)]
+    (if (empty? numbered)
+      tx-data
+      (mapv (fn [f]
+              (let [t (when (and (map? f)
+                                 (not (contains? f :kontor.invoice/number)))
+                        (get numbered (:kontor.invoice/transaction f)))]
+                (if t
+                  (assoc f :kontor.invoice/number
+                         (numbering/render (numbering/journal-config
+                                            txdb (:kontor.transaction/journal t))
+                                           (:kontor.transaction/sequence-number t)
+                                           (:kontor.transaction/effective-date t)))
+                  f)))
+            tx-data))))
+
 (defn validate-and-apply
   "Transactor function. Runs structural validators against the
    speculative `txdb` + the user's original `tx-data`; returns the tx-data
@@ -299,7 +326,7 @@
     ;; ADR-151 — allocate gapless legal numbers, atomically with the entry.
     ;; LAST for the same reason: allocation is the only step with a durable
     ;; side effect on the journal counter.
-    (numbering/allocate txdb (assign-origins txdb tx-data))))
+    (assign-invoice-numbers txdb (numbering/allocate txdb (assign-origins txdb tx-data)))))
 
 (defn pg-tx-wrap
   "Build the `:tx-wrap` fn pg-datahike's `make-query-handler` accepts.
