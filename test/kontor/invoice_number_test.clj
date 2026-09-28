@@ -141,3 +141,39 @@
     (is (= ::st/unsupported
            (try (st/extract base (d/db w)) nil
                 (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))))))
+
+(deftest a-queued-email-quotes-the-parent-s-number
+  (let [conn (bootstrap true)
+        base (d/db conn)
+        w (world-of conn)
+        inv (create-and-send! w "w-inv-9" #inst "2025-03-02T00:00:00Z")]
+    (d/transact w [{:kontor.side-effect-intent/key "mail-w-inv-9"
+                    :kontor.side-effect-intent/type :email
+                    :kontor.side-effect-intent/status :pending
+                    :kontor.side-effect-intent/created-at #inst "2025-03-02T00:00:00Z"
+                    :kontor.side-effect-intent/payload
+                    (str "{:to \"acme@example.com\" :subject \"Rechnung "
+                         (:kontor.invoice/number inv) "\"}")}])
+    (create-and-send! conn "p-inv-9" #inst "2025-03-01T00:00:00Z")
+    (is (= {"RE/2025/0001" "RE/2025/0002"} (st/stamp! conn (st/extract base (d/db w)))))
+    (let [row (d/entity (d/db conn) [:kontor.side-effect-intent/key "mail-w-inv-9"])]
+      (is (= :pending (:kontor.side-effect-intent/status row)))
+      (is (= "{:to \"acme@example.com\" :subject \"Rechnung RE/2025/0002\"}"
+             (:kontor.side-effect-intent/payload row))
+          "the email the parent will send quotes the number the parent gave"))))
+
+(deftest an-effect-a-world-ran-is-refused
+  (let [conn (bootstrap true)
+        base (d/db conn)
+        w (world-of conn)]
+    (d/transact w [{:kontor.side-effect-intent/key "mail-sent"
+                    :kontor.side-effect-intent/type :email
+                    :kontor.side-effect-intent/status :done}])
+    (is (= ::st/unsupported
+           (try (st/extract base (d/db w)) nil
+                (catch clojure.lang.ExceptionInfo e (:type (ex-data e))))))))
+
+(deftest rebase-replaces-longest-first
+  (is (= "RE/2025/0010 and RE/2025/0003"
+         (st/rebase "RE/2025/0001 and RE/2025/0002" {"RE/2025/0001" "RE/2025/0010"
+                                                     "RE/2025/0002" "RE/2025/0003"}))))

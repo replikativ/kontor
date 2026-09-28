@@ -32,7 +32,8 @@
    cancelled, a period close, an outbox intent — is refused by [[extract]]
    with the entities named: silently carrying it over as datoms is exactly
    what this namespace exists to prevent."
-  (:require [datahike.api :as d]
+  (:require [clojure.string :as str]
+            [datahike.api :as d]
             [kontor.book :as book]
             [kontor.book.build :as build]
             [kontor.banking.reconciliation :as recon]
@@ -110,6 +111,7 @@
       (has "kontor.analytic-distribution") :posting-part
       (has "kontor.actor") :actor
       (has "kontor.period") :period
+      (contains? attrs :kontor.side-effect-intent/key) :outbox
       (contains? attrs :kontor.journal/code) :journal
       (catalog-identity db e) :catalog
       :else :other)))
@@ -201,6 +203,14 @@
                        [:periods e]
                        (unsupported! (if new? "created a period" "changed a period beyond closing it")
                                      {:entity e :attrs (vec attrs)}))
+                     :outbox
+                     (let [status (:kontor.side-effect-intent/status (d/entity world-db e))]
+                       (cond
+                         (not new?) (unsupported! "worked an outbox intent of its base: an external effect left a speculative world" {:entity e})
+                         (not= :pending status)
+                         (unsupported! "ran an outbox intent: an external effect left a speculative world"
+                                       {:entity e :status status})
+                         :else [:outbox e]))
                      :catalog (if new?
                                 [:catalog e]
                                 (unsupported! "changed reference data of its base"
@@ -401,7 +411,8 @@
     :import (update i :line #(translate-map world-db tr %))
     :match (-> i (update :journal tr) (update :contra tr) (update :applied-by tr))
     :catalog (update i :entity #(translate-map world-db tr %))
-    :period (update-some i :sealed-by tr)))
+    :period (update-some i :sealed-by tr)
+    :outbox i))
 
 (defn- period-intent
   "A period the world closed or sealed, as that decision: re-run in the
@@ -424,6 +435,31 @@
                 (:kontor.period/sealed-at w))
      :sealed-by (ref-id (:kontor.period/sealed-by w))}))
 
+(defn- outbox-intent
+  "An external effect the world queued and did not run: queued in the
+   parent, last, its payload rebased onto the parent's numbers."
+  [world-db e]
+  (let [row (d/pull world-db [:kontor.side-effect-intent/key :kontor.side-effect-intent/type
+                              :kontor.side-effect-intent/payload :kontor.side-effect-intent/created-at
+                              :kontor.side-effect-intent/max-retries]
+                    e)]
+    {:intent/id (str "outbox:" (:kontor.side-effect-intent/key row))
+     :kind :outbox
+     :footprint #{[:outbox (:kontor.side-effect-intent/key row)]}
+     :effective-date (:kontor.side-effect-intent/created-at row)
+     :row row}))
+
+(defn rebase
+  "`s` with every world number in `renumber` ({world parent}) replaced by
+   the parent's — longest first, so no number is clobbered by a prefix of
+   another."
+  [s renumber]
+  (if (and (string? s) (seq renumber))
+    (reduce (fn [acc [w p]] (str/replace acc w p))
+            s
+            (sort-by (comp - count key) renumber))
+    s))
+
 (declare referenced-entry-eids)
 
 (defn- referenced-eids
@@ -436,6 +472,7 @@
                                 :kontor.bank-line/value-date))
     :match (remove nil? (concat [journal contra applied-by] (keep :eid settles)))
     :period []
+    :outbox []
     :catalog []
     (referenced-entry-eids entry reverses)))
 
@@ -490,7 +527,8 @@
                      (map #(invoice-intent world-db %) (ids-of grouped :invoices))
                      (map #(import-intent world-db %) (remove #(existed? base-db %) lines))
                      matches
-                     (map #(period-intent base-db world-db %) (ids-of grouped :periods)))
+                     (map #(period-intent base-db world-db %) (ids-of grouped :periods))
+                     (map #(outbox-intent world-db %) (ids-of grouped :outbox)))
         translated (mapv #(translate world-db tr %) kept)]
     (doseq [i translated
             e (referenced-eids i)
@@ -559,7 +597,7 @@
     (fn [{:intent/keys [id] :keys [kind entry reverses actor] :as i}]
       (case kind
         :invoice (invoice-tx-data db i)
-        (:import :match :catalog :period) nil
+        (:import :match :catalog :period :outbox) nil
         (when-not (d/entity db [:kontor.transaction/origin-id id])
           (let [tempid (str "settle-" id)
                 input (assoc (build/build-input entry) :tx-tempid tempid)
@@ -689,14 +727,24 @@
         (gate/transact-with-validation
          conn (period/seal-tx-data (d/db conn) period
                                    (cond-> {:at seal-at} sealed-by (assoc :sealed-by sealed-by)))))))
-  (let [db (d/db conn)]
-    (into {}
-          (keep (fn [{:intent/keys [id] :keys [kind world-number invoice]}]
-                  (when world-number
-                    [world-number
-                     (if (= :invoice kind)
-                       (:kontor.invoice/number
-                        (d/entity db [:kontor.invoice/external-id (:kontor.invoice/external-id invoice)]))
-                       (:kontor.transaction/external-id
-                        (d/entity db [:kontor.transaction/origin-id id])))])))
-          intents)))
+  (let [db (d/db conn)
+        renumber (into {}
+                       (keep (fn [{:intent/keys [id] :keys [kind world-number invoice]}]
+                               (when world-number
+                                 [world-number
+                                  (if (= :invoice kind)
+                                    (:kontor.invoice/number
+                                     (d/entity db [:kontor.invoice/external-id (:kontor.invoice/external-id invoice)]))
+                                    (:kontor.transaction/external-id
+                                     (d/entity db [:kontor.transaction/origin-id id])))])))
+                       intents)
+        outbox (vec (for [{:keys [kind row]} intents
+                          :when (and (= :outbox kind)
+                                     (not (entid db [:kontor.side-effect-intent/key
+                                                     (:kontor.side-effect-intent/key row)])))]
+                      (-> row
+                          (update-some :kontor.side-effect-intent/payload #(rebase % renumber))
+                          (assoc :kontor.side-effect-intent/status :pending))))]
+    (when (seq outbox)
+      (gate/transact-with-validation conn outbox))
+    renumber))
