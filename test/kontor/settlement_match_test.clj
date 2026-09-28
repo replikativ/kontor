@@ -5,7 +5,6 @@
   (:require [clojure.test :refer [deftest is testing]]
             [datahike.api :as d]
             [kontor.banking.reconciliation :as recon]
-            [kontor.document.invoice :as invoice]
             [kontor.invoice-number-test :as fixture]
             [kontor.settlement :as st]))
 
