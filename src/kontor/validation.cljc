@@ -225,19 +225,22 @@
   "ADR-172 — a sealed transaction that enters the book without an origin gets
    one, once: the uuid a replay into a parent world carries along, so the
    parent can tell an entry it already holds. An existing entity (a draft
-   being sealed) keeps the origin it has."
+   being sealed) keeps the origin it has. A book whose schema lacks the
+   attribute (a subset schema) gets none."
   [txdb tx-data]
-  (mapv (fn [form]
-          (if (and (map? form)
-                   (contains? form :kontor.transaction/posted-at)
-                   (contains? form :kontor.transaction/journal)
-                   (not (contains? form :kontor.transaction/origin-id))
-                   (not (let [id (:db/id form)]
-                          (and (integer? id) (pos? id)
-                               (:kontor.transaction/origin-id (d/entity txdb id))))))
-            (assoc form :kontor.transaction/origin-id (random-uuid))
-            form))
-        tx-data))
+  (if-not (contains? (d/schema txdb) :kontor.transaction/origin-id)
+    tx-data
+    (mapv (fn [form]
+            (if (and (map? form)
+                     (contains? form :kontor.transaction/posted-at)
+                     (contains? form :kontor.transaction/journal)
+                     (not (contains? form :kontor.transaction/origin-id))
+                     (not (let [id (:db/id form)]
+                            (and (integer? id) (pos? id)
+                                 (:kontor.transaction/origin-id (d/entity txdb id))))))
+              (assoc form :kontor.transaction/origin-id (random-uuid))
+              form))
+          tx-data)))
 
 (defn- assign-invoice-numbers
   "ADR-172 — an invoice sent in this transaction takes the gapless number its
