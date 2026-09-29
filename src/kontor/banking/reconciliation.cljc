@@ -862,8 +862,20 @@
     :as opts}]
   (let [bl (d/pull db [:kontor.bank-line/external-id :kontor.bank-line/amount
                        :kontor.bank-line/source-account :kontor.bank-line/commodity
-                       :kontor.bank-line/date :kontor.bank-line/counterparty]
+                       :kontor.bank-line/date :kontor.bank-line/counterparty
+                       :kontor.bank-line/status]
                    bank-line-eid)
+        _ (when (= :reconciled (:kontor.bank-line/status bl))
+            ;; A second match of one bank line books the payment twice. The
+            ;; gate cannot see it (the second payment is a new, valid entry),
+            ;; and a replay from a world (ADR-172) must not either.
+            (throw (ex-info (str "commit-match!: bank line "
+                                 (:kontor.bank-line/external-id bl)
+                                 " is already reconciled — matching it again would "
+                                 "book the payment twice")
+                            {:type :reconciliation/already-matched
+                             :bank-line bank-line-eid
+                             :external-id (:kontor.bank-line/external-id bl)})))
         amount (:kontor.bank-line/amount bl)
         bank-acct (:db/id (:kontor.bank-line/source-account bl))
         commodity (:db/id (:kontor.bank-line/commodity bl))

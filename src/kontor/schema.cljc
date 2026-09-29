@@ -2752,6 +2752,16 @@
     :db/doc         "Stable caller-supplied id (\"INV-2026-0001\",
                      a beleg :kontor.invoice/id stringified, etc.). Identity."}
 
+   {:db/ident       :kontor.transaction/origin-id
+    :db/valueType   :db.type/uuid
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/identity
+    :db/doc         "Where this entry first came into being (ADR-172): a uuid
+                     the gate assigns the first time an entry is sealed, and
+                     that a replay into a parent world carries along. A
+                     settlement skips an entry whose origin the book already
+                     holds, so replaying a world twice books nothing twice."}
+
    {:db/ident       :kontor.transaction/journal
     :db/valueType   :db.type/ref
     :db/cardinality :db.cardinality/one}
@@ -3334,7 +3344,19 @@
 ;; ============================================================================
 
 (def ^:private invoice-attrs
-  [{:db/ident       :kontor.invoice/external-id
+  [{:db/ident       :kontor.invoice/number
+    :db/valueType   :db.type/string
+    :db/cardinality :db.cardinality/one
+    :db/unique      :db.unique/value
+    :db/doc         "The legal invoice number (§14 UStG and the like): the
+                     gapless number the invoice's journal allocated when it
+                     was sent, rendered from the journal's template
+                     (ADR-151, ADR-172). Set by the gate, never by the
+                     caller; `:kontor.invoice/external-id` stays the
+                     caller's identity. Unique by value — a duplicate legal
+                     number fails instead of merging into another invoice."}
+
+   {:db/ident       :kontor.invoice/external-id
     :db/valueType   :db.type/string
     :db/cardinality :db.cardinality/one
     :db/unique      :db.unique/identity
