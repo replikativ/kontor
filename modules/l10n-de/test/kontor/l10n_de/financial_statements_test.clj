@@ -67,9 +67,9 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)]
     (post! conn id date
-           [{:kontor.posting/account (ace db "1400") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
+           [{:kontor.posting/account (ace db "1200") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
             {:kontor.posting/account (ace db "4400") :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity eur-c}
-            {:kontor.posting/account (ace db "3801") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
+            {:kontor.posting/account (ace db "3806") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
 
 (defn- invoice-7! [conn id date net]
   (let [db (d/db conn)
@@ -79,9 +79,9 @@
                        2 java.math.RoundingMode/HALF_EVEN)
         gross (.add net-bd vat)]
     (post! conn id date
-           [{:kontor.posting/account (ace db "1400") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
+           [{:kontor.posting/account (ace db "1200") :kontor.posting/amount gross :kontor.posting/commodity eur-c}
             {:kontor.posting/account (ace db "4300") :kontor.posting/amount (.negate net-bd) :kontor.posting/commodity eur-c}
-            {:kontor.posting/account (ace db "3806") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
+            {:kontor.posting/account (ace db "3801") :kontor.posting/amount (.negate vat) :kontor.posting/commodity eur-c}])))
 
 (defn- supplier-bill-19! [conn id date net expense-code]
   (let [db (d/db conn)
@@ -92,7 +92,7 @@
         gross (.add net-bd vat)]
     (post! conn id date
            [{:kontor.posting/account (ace db expense-code) :kontor.posting/amount net-bd :kontor.posting/commodity eur-c}
-            {:kontor.posting/account (ace db "1576")       :kontor.posting/amount vat    :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "1406")       :kontor.posting/amount vat    :kontor.posting/commodity eur-c}
             {:kontor.posting/account (ace db "3300")       :kontor.posting/amount (.negate gross) :kontor.posting/commodity eur-c}])))
 
 (defn- rent-no-vat! [conn id date amount]
@@ -100,8 +100,8 @@
         eur-c (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         bd (bigdec amount)]
     (post! conn id date
-           [{:kontor.posting/account (ace db "6300") :kontor.posting/amount bd :kontor.posting/commodity eur-c}
-            {:kontor.posting/account (ace db "1200") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
+           [{:kontor.posting/account (ace db "6310") :kontor.posting/amount bd :kontor.posting/commodity eur-c}
+            {:kontor.posting/account (ace db "1800") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
 
 (defn- salary! [conn id date amount]
   (let [db (d/db conn)
@@ -109,7 +109,7 @@
         bd (bigdec amount)]
     (post! conn id date
            [{:kontor.posting/account (ace db "6020") :kontor.posting/amount bd :kontor.posting/commodity eur-c}
-            {:kontor.posting/account (ace db "1200") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
+            {:kontor.posting/account (ace db "1800") :kontor.posting/amount (.negate bd) :kontor.posting/commodity eur-c}])))
 
 (defn- seed-q1 [conn]
   ;; Sales: 3 × 19% × 1000 + 1 × 7% × 500
@@ -118,9 +118,9 @@
   (invoice-19!  conn "INV-003" mar-15 1000)
   (invoice-7!   conn "INV-004" mar-15 500)
   ;; Bills: Bürobedarf 200, Reisekosten 400, Software 100 (all 19%)
-  (supplier-bill-19! conn "BILL-001" jan-15 200 "6800")
+  (supplier-bill-19! conn "BILL-001" jan-15 200 "6815")
   (supplier-bill-19! conn "BILL-002" feb-15 400 "6650")
-  (supplier-bill-19! conn "BILL-003" mar-15 100 "6815")
+  (supplier-bill-19! conn "BILL-003" mar-15 100 "6837")
   ;; Rent 800/mo (no VAT) Jan + Feb + Mar
   (rent-no-vat! conn "RENT-01" jan-15 800)
   (rent-no-vat! conn "RENT-02" feb-15 800)
@@ -138,10 +138,10 @@
   (let [conn (bootstrap)
         r (pnl/compute conn {:from jan-1 :to apr-1})]
     (is (money/zero? (:statement/total r)) "no postings → no profit")
-    ;; 6 operating sections + § 275 Abs. 2 Nr. 14 (Steuern vom Einkommen
-    ;; und vom Ertrag) and Nr. 16 (sonstige Steuern) — the statutory
-    ;; Staffel does not stop before taxes
-    (is (= 8 (count (:statement/sections r))))))
+    ;; 6 operating sections, the financial result (§ 275 Abs. 2 Nr. 9-11,
+    ;; 12, 13), Nr. 14 (Steuern vom Einkommen und vom Ertrag) and Nr. 16
+    ;; (sonstige Steuern) — the statutory Staffel does not stop before taxes
+    (is (= 11 (count (:statement/sections r))))))
 
 (deftest pnl-q1-totals
   (testing "Sales 3500 (3000 19% + 500 7%), expenses 700 supplier-bills
@@ -225,8 +225,8 @@
         dec-31 #inst "2026-12-31T00:00:00Z"]
     ;; a capital injection booked ON Dec 31: Dr 1200 Bank / Cr 2900 Kapital
     (post! conn "YE-CAP" dec-31
-           [{:kontor.posting/account (ace (d/db conn) "1200") :kontor.posting/amount 5000M :kontor.posting/commodity eur}
-            {:kontor.posting/account (ace (d/db conn) "2900") :kontor.posting/amount -5000M :kontor.posting/commodity eur}])
+           [{:kontor.posting/account (ace (d/db conn) "1800") :kontor.posting/amount 5000M :kontor.posting/commodity eur}
+            {:kontor.posting/account (ace (d/db conn) "2970") :kontor.posting/amount -5000M :kontor.posting/commodity eur}])
     (testing ":through Dec-31 INCLUDES the Dec-31 entry"
       (is (= 5000M (:amount (:statement/total (bs/compute-aktiva conn {:through dec-31}))))))
     (testing ":to Dec-31 (exclusive) EXCLUDES it"

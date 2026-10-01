@@ -40,7 +40,7 @@
    posting (not tax) so this routing stays in invoice.clj."
   {19.0M "4400"  ; Erlöse 19% USt
    7.0M  "4300"  ; Erlöse 7% USt
-   0.0M  "4200"  ; Steuerfreie Umsätze §4 UStG
+   0.0M  "4120"  ; Steuerfreie Umsätze § 4 Nr. 1a UStG
    })
 
 ;; USt-payable account routing per VAT rate moved to
@@ -90,7 +90,7 @@
    USt postings are produced by the ADR-071 tax provider/builder
    (`kontor.l10n-de.tax-provider`); revenue postings stay here."
   [{:keys [ar-code journal-code commodity-symbol]
-    :or {ar-code "1400" journal-code "INV"}}
+    :or {ar-code "1200" journal-code "INV"}}
    db invoice]
   (let [ext-id    (:kontor.invoice/external-id invoice)
         date      (:kontor.invoice/issue-date invoice)

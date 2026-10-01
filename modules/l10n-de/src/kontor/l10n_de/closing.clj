@@ -4,13 +4,13 @@
    journal to \"CLOSE\".
 
    Both can be overridden — Kapitalgesellschaften that distinguish
-   :gewinnvortrag (2900) from :verlustvortrag (2978) before the
+   :gewinnvortrag (2970) from :verlustvortrag (2978) before the
    shareholder resolution may want their own routing."
   (:require [datahike.api :as d]
             [kontor.account :as kacct]
             [kontor.reporting.closing :as closing]))
 
-(def ^:const default-retained-code "2900")
+(def ^:const default-retained-code "2970")
 (def ^:const default-journal-code "CLOSE")
 
 (defn- ace [db code]

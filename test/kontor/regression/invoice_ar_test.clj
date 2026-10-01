@@ -57,16 +57,16 @@
       {:kontor.partner/external-id "U-alice" :kontor.partner/name "Alice"}
       ;; SKR04-shaped accounts (commodity-pinned so an empty aging can still
       ;; denominate; non-empty aging infers commodity from the postings).
-      {:kontor.account/code "1400" :kontor.account/name "Forderungen (AR)"
+      {:kontor.account/code "1200" :kontor.account/name "Forderungen (AR)"
        :kontor.account/path "Assets:AR" :kontor.account/type :asset
        :kontor.account/active true :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-      {:kontor.account/code "1200" :kontor.account/name "Bank"
+      {:kontor.account/code "1800" :kontor.account/name "Bank"
        :kontor.account/path "Assets:Bank" :kontor.account/type :asset
        :kontor.account/active true :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
       {:kontor.account/code "4400" :kontor.account/name "Erlöse 19%"
        :kontor.account/path "Income:Sales" :kontor.account/type :revenue
        :kontor.account/active true :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
-      {:kontor.account/code "3801" :kontor.account/name "USt 19%"
+      {:kontor.account/code "3806" :kontor.account/name "USt 19%"
        :kontor.account/path "Liabilities:VAT" :kontor.account/type :liability
        :kontor.account/active true :kontor.account/commodity [:kontor.commodity/symbol "EUR"]}
       ;; Tenant-wide GL defaults the posting bridge routes through.
@@ -334,11 +334,11 @@
                            :kontor.transaction/state :posted
                            :kontor.transaction/posted-at #inst "2026-01-15"}
              :postings
-             [{:kontor.posting/account (ace "1400") :kontor.posting/amount gross
+             [{:kontor.posting/account (ace "1200") :kontor.posting/amount gross
                :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}
               {:kontor.posting/account (ace "4400") :kontor.posting/amount (.negate ^java.math.BigDecimal net)
                :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}
-              {:kontor.posting/account (ace "3801") :kontor.posting/amount (.negate ^java.math.BigDecimal vat)
+              {:kontor.posting/account (ace "3806") :kontor.posting/amount (.negate ^java.math.BigDecimal vat)
                :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}]})]
     (v/transact-with-validation *conn* tx)
     (eid :kontor.transaction/external-id ext-id)))
@@ -359,17 +359,17 @@
                                 :kontor.transaction/state :posted
                                 :kontor.transaction/posted-at #inst "2026-02-10"}
                   :postings
-                  [{:kontor.posting/account (ace "1200") :kontor.posting/amount 690M
+                  [{:kontor.posting/account (ace "1800") :kontor.posting/amount 690M
                     :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-02-10"}
-                   {:kontor.posting/account (ace "1400") :kontor.posting/amount -690M
+                   {:kontor.posting/account (ace "1200") :kontor.posting/amount -690M
                     :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-02-10"}]})]
         (v/transact-with-validation *conn* pay))
       (let [db  (d/db *conn*)
             eur-eid (eur)
-            opens (recon/open-receivables-by-tx db #{"1400"})
+            opens (recon/open-receivables-by-tx db #{"1200"})
             ;; as-of 2026-04-30, due 2026-03-01 → 60 days overdue → :31-60
-            rows (kaging/aging-rows db #{"1400"} :as-of #inst "2026-04-30")
-            sum  (kaging/aging-summary-by-bucket db #{"1400"} :as-of #inst "2026-04-30")]
+            rows (kaging/aging-rows db #{"1200"} :as-of #inst "2026-04-30")
+            sum  (kaging/aging-summary-by-bucket db #{"1200"} :as-of #inst "2026-04-30")]
         (testing "one open receivable, open = 1190 − 690 = 500"
           (is (= 1 (count opens)))
           (is (zero? (money/compare-amounts 500M (:open-amount (first opens)))))
@@ -404,16 +404,16 @@
                              :kontor.transaction/state :posted
                              :kontor.transaction/posted-at #inst "2026-01-15"}
                :postings
-               [{:kontor.posting/account (ace "1400") :kontor.posting/amount 100M
+               [{:kontor.posting/account (ace "1200") :kontor.posting/amount 100M
                  :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}
-                {:kontor.posting/account (ace "1400") :kontor.posting/amount 100M
+                {:kontor.posting/account (ace "1200") :kontor.posting/amount 100M
                  :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}
                 {:kontor.posting/account (ace "4400") :kontor.posting/amount -200M
                  :kontor.posting/commodity (eur) :kontor.posting/posted-at #inst "2026-01-15"}]})]
       (v/transact-with-validation *conn* tx)
       (let [db    (d/db *conn*)
-            opens (recon/open-receivables-by-tx db #{"1400"})
-            sum   (kaging/aging-summary-by-bucket db #{"1400"} :as-of #inst "2026-04-30")]
+            opens (recon/open-receivables-by-tx db #{"1200"})
+            sum   (kaging/aging-summary-by-bucket db #{"1200"} :as-of #inst "2026-04-30")]
         (testing "open = 200, NOT 100 (the two equal legs survive)"
           (is (= 1 (count opens)))
           (is (zero? (money/compare-amounts 200M (:open-amount (first opens))))))
@@ -439,7 +439,7 @@
                              :counterparty "Big Customer Co"
                              :description narration
                              :raw-row ["02/01/2026" (str amount) narration]}]
-                           {:source-account-eid (ace "1200")
+                           {:source-account-eid (ace "1800")
                             :commodity-eid (eur)})
   (let [db (d/db *conn*)
         bl (d/q '[:find ?bl . :in $ ?amt
@@ -449,7 +449,7 @@
         best (first (recon/suggest-match db bl {}))]
     (recon/commit-match! *conn* bl (:match best)
                          (eid :kontor.journal/code "CR")
-                         (merge {:ar-codes #{"1400"}} opts))
+                         (merge {:ar-codes #{"1200"}} opts))
     (:transactions (:match best))))
 
 (deftest commit-match-writes-the-subledger-so-dunning-agrees
@@ -472,7 +472,7 @@
                                              db {:entity-eid (entity)
                                                  :as-of #inst "2026-04-30"}))))))
         (testing "and the kernel :settles view agrees"
-          (is (empty? (recon/open-receivables-by-tx db #{"1400"}))))))))
+          (is (empty? (recon/open-receivables-by-tx db #{"1200"}))))))))
 
 (deftest commit-match-of-a-partial-does-not-close-the-invoice
   (testing "flip-paid-on-settlement used to flip straight to :paid with no
@@ -543,7 +543,7 @@
     (testing "path A — reconciliation commit-match!"
       (let [_ (open-invoice! "ORD-11" 10M 25M VAT)
             _ (ingest-and-match! GROSS "Rechnung INV-ORD-11" {:applied-by-uid (actor)})
-            t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1400"}})]
+            t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1200"}})]
         (is (:ok? t) (pr-str t))
         (is (zero? (.compareTo 0M (:difference t))))
         (is (zero? (.compareTo 0M (:gl t)))
@@ -557,13 +557,13 @@
                                :payment (payment! "PAY-12")
                                :amount GROSS
                                :commodity (eur)
-                               :cash-account (ace "1200")
-                               :receivable-account (ace "1400")
+                               :cash-account (ace "1800")
+                               :receivable-account (ace "1200")
                                :journal (eid :kontor.journal/code "CR")
                                :applied-by-uid (actor)
                                :effective-date #inst "2026-02-01"})
         (let [db (d/db *conn*)
-              t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1400"}})]
+              t (recon/ar-tie-out *conn* {:commodity (eur) :ar-codes #{"1200"}})]
           (is (:ok? t) (pr-str t))
           (is (zero? (.compareTo 0M (:difference t))))
           (is (= :paid (sm/current-status db invoice :kontor.invoice/status))

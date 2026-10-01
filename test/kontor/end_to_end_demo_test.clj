@@ -129,7 +129,7 @@
   [conn ext-id date narration expense-code amount]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        bank (ace db "1200")
+        bank (ace db "1800")
         exp (ace db expense-code)
         exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     (d/transact conn
@@ -153,7 +153,7 @@
   [conn date amount counterparty memo]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        bank-acct (ace db "1200")
+        bank-acct (ace db "1800")
         bank-jnl (:db/id (d/entity db [:kontor.journal/code "BANK"]))
         _ (recon/ingest-statement!
            conn [{:bank :test :date date :amount amount
@@ -212,19 +212,19 @@
     (testing "Operating expenses paid from bank"
       ;; Office rent quarterly: 600€ on Mar 1 (Vermieter — VAT-exempt
       ;; small landlord; no input VAT).
-      (pay-expense-from-bank! conn "EXP-2025-01" mar-1 "Büro-Miete Q1" "6300" 600M)
-      (pay-expense-from-bank! conn "EXP-2025-02" jun-1 "Software" "6815" 100M))
+      (pay-expense-from-bank! conn "EXP-2025-01" mar-1 "Büro-Miete Q1" "6310" 600M)
+      (pay-expense-from-bank! conn "EXP-2025-02" jun-1 "Software" "6837" 100M))
 
     ;; --------------------------------------------------------------
     ;; 2. Pre-payment ledger snapshot — balances expected
     ;; --------------------------------------------------------------
     (testing "Pre-payment trial: AR open for both invoices, USt collected accumulated"
-      (is (= 7140M (bal conn "1400" oct-15))   "AR = (2000 + 4000) gross + (380+760) USt")
+      (is (= 7140M (bal conn "1200" oct-15))   "AR = (2000 + 4000) gross + (380+760) USt")
       (is (= -6000M (bal conn "4400" oct-15))  "Revenue 19% net = -2000 -4000 (credit-natural)")
-      (is (= -1140M (bal conn "3801" oct-15))  "USt 19% collected = -(380+760)")
-      (is (= -700M (bal conn "1200" oct-15))   "Bank = -600 rent -100 software")
-      (is (= 600M (bal conn "6300" oct-15))    "Rent expense")
-      (is (= 100M (bal conn "6815" oct-15))    "Software expense"))
+      (is (= -1140M (bal conn "3806" oct-15))  "USt 19% collected = -(380+760)")
+      (is (= -700M (bal conn "1800" oct-15))   "Bank = -600 rent -100 software")
+      (is (= 600M (bal conn "6310" oct-15))    "Rent expense")
+      (is (= 100M (bal conn "6837" oct-15))    "Software expense"))
 
     ;; --------------------------------------------------------------
     ;; 3. Reconciliation: ACME pays Invoice 1 on Mar 20
@@ -242,11 +242,11 @@
               the Jun software expense is also future."
       ;; AR at apr-1 = invoice-1 (2380) - payment (2380) = 0; the Sep
       ;; invoice's valid-from is sep-15 so it is not yet visible.
-      (is (= 0M (bal conn "1400" apr-1))
+      (is (= 0M (bal conn "1200" apr-1))
           "Invoice-1 settled; invoice-2 not yet valid (valid-from Sep 15)")
       ;; Bank at apr-1: -600 rent + 2380 payment = 1780.
       ;; The Jun software expense is not yet valid.
-      (is (= 1780M (bal conn "1200" apr-1))
+      (is (= 1780M (bal conn "1800" apr-1))
           "-600 rent (Mar) + 2380 payment (Mar 20)"))
 
     ;; --------------------------------------------------------------
@@ -273,7 +273,7 @@
     ;; --------------------------------------------------------------
     (testing "AR aging at year-end: no open receivables (all paid)"
       (let [summary (aging/aging-summary-by-bucket
-                     (d/db conn) #{"1400"}
+                     (d/db conn) #{"1200"}
                      :as-of jan-1-26 :ar-or-ap :ar)]
         ;; values are Money now; with no open items the zero is denominated
         ;; from the AR accounts' own :kontor.account/commodity
@@ -286,21 +286,18 @@
     ;; 7. EÜR FY2025 — full-year P&L
     ;; --------------------------------------------------------------
     (testing "EÜR FY2025 — note: cash-basis form on accrual ledger.
-              The form treats USt-Verbindlichkeit (3801) as both
-              vereinnahmte USt (line 14, signed) AND gezahlte USt
-              (line 50, sign-flipped) — they cancel in a true cash
-              ledger but offset visibly in our accrual ledger."
+              Collected USt (3806) is line 14; line 50 is only the USt
+              paid to the Finanzamt (Vorauszahlungen 3820-3839), of
+              which this book has none."
       (let [e (eur/compute conn {:from jan-1 :to jan-1-26})]
         ;; Net revenue (4400) = 6000; line 14 deducts collected USt
         ;; (-1140 raw) → einnahmen = 4860.
         (is (= 4860.00M (-> e :eur/einnahmen :amount)))
-        ;; Expenses 600 + 100; line 50 adds USt 3801 inflow-flipped
-        ;; (+1140) → ausgaben = 1840.
-        (is (= 1840.00M (-> e :eur/ausgaben :amount)))
-        ;; Gewinn = 4860 − 1840 = 3020. (For a cash ledger where
-        ;; USt would only post when actually collected/paid, the
-        ;; numbers reduce to revenue 6000 − cost 700 = 5300.)
-        (is (= 3020.00M (-> e :eur/gewinn :amount)))))
+        ;; Expenses 600 rent + 100 software; no USt paid to the FA.
+        (is (= 700.00M (-> e :eur/ausgaben :amount)))
+        ;; Gewinn = 4860 − 700 = 4160. (The old line 50 also counted
+        ;; the collected USt account, adding it back as an expense.)
+        (is (= 4160.00M (-> e :eur/gewinn :amount)))))
 
     ;; --------------------------------------------------------------
     ;; 8. Year-end close
@@ -314,18 +311,18 @@
         (is (some? period-close-tx-report))
         ;; In the new fiscal year, P&L accounts are zero again
         (is (= 0M (bal conn "4400" jan-1-26)) "Revenue zeroed")
-        (is (= 0M (bal conn "6300" jan-1-26)) "Rent zeroed")
-        (is (= 0M (bal conn "6815" jan-1-26)) "Software zeroed")
+        (is (= 0M (bal conn "6310" jan-1-26)) "Rent zeroed")
+        (is (= 0M (bal conn "6837" jan-1-26)) "Software zeroed")
         ;; Retained earnings carries the net result. Net P&L was
         ;; -6000 + 600 + 100 = -5300 (revenue is credit-natural).
         ;; Closing posts that net into retained, so retained = -5300
         ;; (a credit balance on equity = profit).
-        (is (= -5300M (bal conn "2900" jan-1-26))
+        (is (= -5300M (bal conn "2970" jan-1-26))
             "Retained earnings carries the FY2025 profit (5300€)")
         ;; Balance-sheet sanity: bank still holds the cash earned
-        (is (= 6440M (bal conn "1200" jan-1-26))
+        (is (= 6440M (bal conn "1800" jan-1-26))
             "Bank balance = 1680 (post-Q1) + 4760 (Q3 payment) = 6440")
         ;; AR is fully paid, USt was collected (not yet remitted)
-        (is (= 0M (bal conn "1400" jan-1-26)) "AR zero")
-        (is (= -1140M (bal conn "3801" jan-1-26))
+        (is (= 0M (bal conn "1200" jan-1-26)) "AR zero")
+        (is (= -1140M (bal conn "3806" jan-1-26))
             "USt-Verbindlichkeit (uncollected by Finanzamt in this scenario)")))))

@@ -136,9 +136,9 @@
     ;; Transition timestamp now lives in :status-history via kbt
     (is (= transaction-eid (-> inv :kontor.invoice/transaction :db/id)))
     ;; Receivable +1891.50, Revenue -1589.50, USt -302.00
-    (is (= 1891.50M (get by-code "1400")))
+    (is (= 1891.50M (get by-code "1200")))
     (is (= -1589.50M (get by-code "4400")))
-    (is (= -302.00M (get by-code "3801")))
+    (is (= -302.00M (get by-code "3806")))
     ;; Sums to zero
     (is (zero? (.signum ^java.math.BigDecimal
                 (reduce #(.add ^java.math.BigDecimal %1 %2)
@@ -174,7 +174,7 @@
           builder (partial inv-de/posting-builder {})
           {:keys [transaction-eid]} (inv/send! conn inv-eid builder)
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db [:kontor.journal/code "BANK"]))
           ;; Ingest a matching bank line
@@ -223,12 +223,12 @@
       ;; bank receipt of 1891.50 leaves: bank 1200 = +1891.50, receivable
       ;; 1400 = 1891.50 − 1891.50 = 0.00.
       (testing "and the ledger actually moved: bank up, receivable cleared"
-        (is (= 0 (.compareTo 1891.50M (bal "1200")))
+        (is (= 0 (.compareTo 1891.50M (bal "1800")))
             "the bank account carries the receipt")
-        (is (= 0 (.compareTo 0M (bal "1400")))
+        (is (= 0 (.compareTo 0M (bal "1200")))
             "the receivable is fully relieved"))
       (testing "and the AR subledger ties to the receivable control account"
-        (let [tie (recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+        (let [tie (recon/ar-tie-out conn {:ar-codes #{"1200"} :commodity eur})]
           (is (= 0 (.compareTo 0M (:subledger tie))))
           (is (= 0 (.compareTo 0M (:gl tie))))
           (is (:ok? tie) (str "AR tie-out broken: " tie)))))))
@@ -265,7 +265,7 @@
                             :where [?r :kontor.transaction/reverses ?orig]]
                           db transaction-eid)
         ;; Sum all postings on AR — should be net zero (orig +1891.50, reversal -1891.50)
-        ar-eid (ace db "1400")
+        ar-eid (ace db "1200")
         ar-sum (reduce
                 (fn [^java.math.BigDecimal a [_ amt]] (.add a amt))
                 0M

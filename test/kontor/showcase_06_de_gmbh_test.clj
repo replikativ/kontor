@@ -73,7 +73,7 @@
       ;; Operating accounts for the misclassification story
       {:kontor.account/code "4660" :kontor.account/name "Reisekosten AN" :kontor.account/type :expense :kontor.account/active true}
       {:kontor.account/code "4650" :kontor.account/name "Bewirtungskosten 70%" :kontor.account/type :expense :kontor.account/active true}
-      {:kontor.account/code "1000" :kontor.account/name "Kasse" :kontor.account/type :asset :kontor.account/active true}])
+      {:kontor.account/code "1600" :kontor.account/name "Kasse" :kontor.account/type :asset :kontor.account/active true}])
     conn))
 
 (deftest multi-year-de-gmbh-end-to-end
@@ -143,7 +143,7 @@
                            [{:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "4660")
                              :kontor.posting/amount 1200.00M
                              :kontor.posting/commodity eur}
-                            {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
+                            {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1600")
                              :kontor.posting/amount -1200.00M
                              :kontor.posting/commodity eur}]})
                          #inst "2026-11-22"))
@@ -203,7 +203,7 @@
              [{:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "4650")
                :kontor.posting/amount 1200.00M
                :kontor.posting/commodity eur}
-              {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1000")
+              {:kontor.posting/account (ref-eid (d/db conn) :kontor.account/code "1600")
                :kontor.posting/amount -1200.00M
                :kontor.posting/commodity eur}]})
            #inst "2027-10-15"))

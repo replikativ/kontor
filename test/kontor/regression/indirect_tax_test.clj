@@ -67,9 +67,9 @@
     :external-id    ext
     :commodity      :EUR
     :narration      ext
-    :postings [{:account (eid conn "1400") :amount (+ net vat-amt)}
+    :postings [{:account (eid conn "1200") :amount (+ net vat-amt)}
                {:account (eid conn "4400") :amount (- net)}
-               {:account (eid conn "3801") :amount (- vat-amt)}]}))
+               {:account (eid conn "3806") :amount (- vat-amt)}]}))
 
 (defn- de-sale-7!
   "SKR04 7% sale of `net` EUR: Dr 1400 gross / Cr 4300 net / Cr 3806 VAT."
@@ -81,9 +81,9 @@
     :external-id    ext
     :commodity      :EUR
     :narration      ext
-    :postings [{:account (eid conn "1400") :amount (+ net vat-amt)}
+    :postings [{:account (eid conn "1200") :amount (+ net vat-amt)}
                {:account (eid conn "4300") :amount (- net)}
-               {:account (eid conn "3806") :amount (- vat-amt)}]}))
+               {:account (eid conn "3801") :amount (- vat-amt)}]}))
 
 (defn- de-purchase-19!
   "SKR04 19% purchase of `net` EUR: Dr 6800 net / Dr 1576 Vorsteuer / Cr 3300 gross."
@@ -95,15 +95,15 @@
     :external-id    ext
     :commodity      :EUR
     :narration      ext
-    :postings [{:account (eid conn "6800") :amount net}
-               {:account (eid conn "1576") :amount vat-amt}
+    :postings [{:account (eid conn "6815") :amount net}
+               {:account (eid conn "1406") :amount vat-amt}
                {:account (eid conn "3300") :amount (- (+ net vat-amt))}]}))
 
 (def de-codes
   "SKR04 output/input VAT account codes a DE consumer must supply to the
    kernel compute-vat-return (there is no DE default — see F8)."
-  {:output-vat-codes ["3801" "3806"]
-   :input-vat-codes  ["1576"]
+  {:output-vat-codes ["3806" "3801"]
+   :input-vat-codes  ["1406"]
    :commodity        :EUR})
 
 (deftest de-ustva-net-payable
@@ -176,8 +176,8 @@
            (vat/compute-vat-return conn {:from jan-1 :to feb-1 :commodity :EUR}))))
     (testing "and still works when the DE consumer does pass the SKR04 codes"
       (let [r (vat/compute-vat-return conn {:from jan-1 :to feb-1 :commodity :EUR
-                                            :output-vat-codes ["3801" "3806"]
-                                            :input-vat-codes ["1576"]})]
+                                            :output-vat-codes ["3806" "3801"]
+                                            :input-vat-codes ["1406"]})]
         (is (money/equiv? (money/money "187.00" :EUR) (:net-vat r)))))))
 
 ;; ============================================================================

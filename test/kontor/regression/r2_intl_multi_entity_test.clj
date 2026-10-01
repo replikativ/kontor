@@ -110,10 +110,10 @@
                   :kontor.entity/active true}])
     (d/transact conn
                 [{:db/id "cash" :kontor.account/path "Assets:Cash"
-                  :kontor.account/code "1000" :kontor.account/name "Cash"
+                  :kontor.account/code "1600" :kontor.account/name "Cash"
                   :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "ar-ic" :kontor.account/path "Assets:AR-IC"
-                  :kontor.account/code "1400" :kontor.account/name "AR — Intercompany"
+                  :kontor.account/code "1200" :kontor.account/name "AR — Intercompany"
                   :kontor.account/type :asset :kontor.account/active true}
                  {:db/id "ap-ic" :kontor.account/path "Liabilities:AP-IC"
                   :kontor.account/code "2400" :kontor.account/name "AP — Intercompany"
