@@ -111,7 +111,7 @@
        :kontor.entity/name "Acme CA Corp" :kontor.entity/kind :operating}
       ;; Per-country minimal payroll chart.
       ;; DE — SKR04 wage accounts.
-      {:db/id "de-wages" :kontor.account/code "4120"
+      {:db/id "de-wages" :kontor.account/code "4125"
        :kontor.account/name "Löhne und Gehälter"
        :kontor.account/type :expense :kontor.account/active true}
       {:db/id "de-wages-payable" :kontor.account/code "1741"
@@ -121,7 +121,7 @@
       {:db/id "us-wages" :kontor.account/code "6100"
        :kontor.account/name "Wages Expense"
        :kontor.account/type :expense :kontor.account/active true}
-      {:db/id "us-wages-payable" :kontor.account/code "2100"
+      {:db/id "us-wages-payable" :kontor.account/code "2180"
        :kontor.account/name "Wages Payable"
        :kontor.account/type :liability :kontor.account/active true}
       ;; CA.
@@ -238,10 +238,10 @@
         j-de (ref-eid db :kontor.journal/code "PAY-DE")
         j-us (ref-eid db :kontor.journal/code "PAY-US")
         j-ca (ref-eid db :kontor.journal/code "PAY-CA")
-        de-wages-exp (ref-eid db :kontor.account/code "4120")
+        de-wages-exp (ref-eid db :kontor.account/code "4125")
         de-wages-pay (ref-eid db :kontor.account/code "1741")
         us-wages-exp (ref-eid db :kontor.account/code "6100")
-        us-wages-pay (ref-eid db :kontor.account/code "2100")
+        us-wages-pay (ref-eid db :kontor.account/code "2180")
         ca-wages-exp (ref-eid db :kontor.account/code "5400")
         ca-wages-pay (ref-eid db :kontor.account/code "2110")
         de-fact {:gross 3000M :net 1900M
@@ -494,7 +494,7 @@
        {:db/id "us-wages" :kontor.account/code "6100"
         :kontor.account/name "Wages Expense"
         :kontor.account/type :expense :kontor.account/active true}
-       {:db/id "us-wages-payable" :kontor.account/code "2100"
+       {:db/id "us-wages-payable" :kontor.account/code "2180"
         :kontor.account/name "Wages Payable"
         :kontor.account/type :liability :kontor.account/active true}
        {:db/id "ca-wages" :kontor.account/code "5400"
@@ -649,7 +649,7 @@
                               {:kind :employer-si :amount 50M :employer-side? true}]
                  :jurisdiction-specific-codes {:ca/province "ON"}}
         us-wages-exp (ref-eid (d/db conn) :kontor.account/code "6100")
-        us-wages-pay (ref-eid (d/db conn) :kontor.account/code "2100")
+        us-wages-pay (ref-eid (d/db conn) :kontor.account/code "2180")
         ca-wages-exp (ref-eid (d/db conn) :kontor.account/code "5400")
         ca-wages-pay (ref-eid (d/db conn) :kontor.account/code "2110")
         _ (run-country-payroll!

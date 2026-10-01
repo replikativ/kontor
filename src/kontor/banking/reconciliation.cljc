@@ -367,7 +367,7 @@
 
    Required: `:commodity` (eid — the tie-out is per-commodity, since a
    blended figure across currencies means nothing).
-   Optional: `:ar-codes` (default `#{\"1400\"}`), `:as-of-valid`,
+   Optional: `:ar-codes` (default `#{\"1200\"}`, SKR04 Forderungen aus L+L), `:as-of-valid`,
    `:as-of-tx` (applied to BOTH sides — `:as-of-tx` snapshots the db the
    subledger query runs against, so a current subledger is never compared
    to a historical GL), `:entity`, `:ledger` (passed to `account-balance`).
@@ -375,7 +375,7 @@
    Returns `{:ar-codes :accounts :subledger :gl :difference :ok?}`, all
    amounts BigDecimal."
   [conn {:keys [ar-codes commodity as-of-valid as-of-tx entity ledger]
-         :or   {ar-codes #{"1400"}}}]
+         :or   {ar-codes #{"1200"}}}]
   (when-not commodity (throw (ex-info "ar-tie-out: :commodity required" {})))
   (let [db        (cond-> (d/db conn) as-of-tx (d/as-of as-of-tx))
         opts      (cond-> {}
@@ -523,7 +523,7 @@
                           maps an importer's :category to a contra
                           account. Optional."
   [db bank-line-eid {:keys [ar-codes ap-codes category-resolver]
-                     :or {ar-codes #{"1400"} ap-codes #{"3300"}}}]
+                     :or {ar-codes #{"1200"} ap-codes #{"3300"}}}]
   (let [bl (d/pull db [:kontor.bank-line/amount :kontor.bank-line/description
                        :kontor.bank-line/counterparty :kontor.bank-line/category]
                    bank-line-eid)
@@ -857,7 +857,7 @@
    the one commit."
   [db bank-line-eid match journal-eid
    {:keys [ar-codes ap-codes external-id-prefix contra-account]
-    :or {ar-codes #{"1400"} ap-codes #{"3300"}
+    :or {ar-codes #{"1200"} ap-codes #{"3300"}
          external-id-prefix "PAY-"}
     :as opts}]
   (let [bl (d/pull db [:kontor.bank-line/external-id :kontor.bank-line/amount

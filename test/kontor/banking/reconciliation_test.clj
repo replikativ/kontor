@@ -52,9 +52,9 @@
   [conn external-id partner-extid net]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        recv (ace db "1400")
+        recv (ace db "1200")
         rev (ace db "4400")
-        ust (ace db "3801")
+        ust (ace db "3806")
         jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         partner (:db/id (d/entity db [:kontor.partner/external-id partner-extid]))
         net-bd (bigdec net)
@@ -97,7 +97,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db (d/db conn)
-          opens (recon/open-receivables-by-tx db #{"1400"})
+          opens (recon/open-receivables-by-tx db #{"1200"})
           ext-ids (set (map :external-id opens))
           by-extid (into {} (map (juxt :external-id :open-amount)) opens)]
       (is (= #{"INV-2026-001" "INV-2026-002" "INV-2026-003"} ext-ids))
@@ -139,7 +139,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           opts {:source-account-eid bank-acct :commodity-eid eur}]
       (recon/ingest-statement! conn (bank-candidates) opts)
@@ -161,7 +161,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
@@ -183,7 +183,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
@@ -208,7 +208,7 @@
           _ (post-invoice! conn "INV-2026-003" "ACME"   500) ; 595.00
           _ (post-invoice! conn "INV-2026-002" "BETA"  2000) ; 2380.00
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           consolidated [{:bank :test :date feb-5 :amount 1785.00M
                          :counterparty "ACME GmbH"
@@ -242,7 +242,7 @@
           _ (post-invoice! conn "INV-2026-003" "ACME"   500)
           _ (post-invoice! conn "INV-2026-002" "BETA"  2000)
           db0 (d/db conn)
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn
@@ -256,7 +256,7 @@
           [bl] (d/q '[:find [?bl] :where [?bl :kontor.bank-line/amount 1785.00M]] db)
           best (first (recon/suggest-match db bl {}))
           _ (recon/commit-match! conn bl (:match best) bank-jnl {})
-          opens (recon/open-receivables-by-tx (d/db conn) #{"1400"})
+          opens (recon/open-receivables-by-tx (d/db conn) #{"1200"})
           ext-ids (set (map :external-id opens))]
       ;; Only BETA remains open
       (is (= #{"INV-2026-002"} ext-ids)
@@ -270,7 +270,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db (d/db conn)
-          bank-acct (ace db "1200")
+          bank-acct (ace db "1800")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct
@@ -282,11 +282,11 @@
           suggestions (recon/suggest-match db strom-bl
                                            {:category-resolver
                                             (fn [c] (when (= c :nebenkosten)
-                                                      (ace db "6400")))})]
+                                                      (ace db "6325")))})]
       (is (seq suggestions))
       (is (= :category (:strategy (first suggestions))))
       (is (= :categorize (:kind (:match (first suggestions)))))
-      (is (= (ace db "6400") (:contra-account (:match (first suggestions))))))))
+      (is (= (ace db "6325") (:contra-account (:match (first suggestions))))))))
 
 ;; ============================================================================
 ;; Commit
@@ -300,7 +300,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db0 (d/db conn)
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           inv-jnl (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
@@ -315,7 +315,7 @@
           {:keys [payment-tx-eid]} (recon/commit-match!
                                     conn acme-bl (:match best) bank-jnl {})
           db (d/db conn)
-          opens (recon/open-receivables-by-tx db #{"1400"})
+          opens (recon/open-receivables-by-tx db #{"1200"})
           ext-ids (set (map :external-id opens))
           payment-tx (d/pull db [:kontor.transaction/external-id
                                  {:kontor.transaction/settles
@@ -349,7 +349,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db0 (d/db conn)
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
@@ -370,7 +370,7 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           db0 (d/db conn)
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           _ (recon/ingest-statement! conn (bank-candidates)
@@ -418,10 +418,10 @@
                           :kontor.transaction/posted-at jan-15}
             ;; two receivable legs of exactly 100 — indistinguishable to a
             ;; :find that does not return the posting
-            :postings [(leg (acct "1400") 100.00M)
-                       (leg (acct "1400") 100.00M)
+            :postings [(leg (acct "1200") 100.00M)
+                       (leg (acct "1200") 100.00M)
                        (leg (acct "4400") -200.00M)]}))
-    (let [open (->> (recon/open-receivables-by-tx (d/db conn) #{"1400"})
+    (let [open (->> (recon/open-receivables-by-tx (d/db conn) #{"1200"})
                     (filter #(= "INV-TWO-EQUAL-LEGS" (:external-id %)))
                     first)]
       (is (some? open))
@@ -492,9 +492,9 @@
           _ (seed-three-invoices conn)
           db0 (d/db conn)
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
-          tie #(recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+          tie #(recon/ar-tie-out conn {:ar-codes #{"1200"} :commodity eur})]
 
       (testing "three unsettled invoices: 1190.00 + 2380.00 + 595.00 = 4165.00"
         ;; nets: 1000 / 2000 / 500; 19% USt: 190.00 / 380.00 / 95.00
@@ -546,9 +546,9 @@
                             :kontor.transaction/effective-date feb-1
                             :kontor.transaction/state :posted
                             :kontor.transaction/posted-at feb-1}
-              :postings [(leg (ace db0 "1200") 1190.00M)
-                         (leg (ace db0 "1400") -1190.00M)]}))
-      (let [t (recon/ar-tie-out conn {:ar-codes #{"1400"} :commodity eur})]
+              :postings [(leg (ace db0 "1800") 1190.00M)
+                         (leg (ace db0 "1200") -1190.00M)]}))
+      (let [t (recon/ar-tie-out conn {:ar-codes #{"1200"} :commodity eur})]
         ;; subledger still 4165.00 (nothing was linked); GL 4165.00 − 1190.00
         (is (= 4165.00M (:subledger t)))
         (is (= 2975.00M (:gl t)))
@@ -566,11 +566,11 @@
     (let [conn (bootstrap)
           _ (seed-three-invoices conn)
           _ (d/transact conn [{:kontor.account/path "Assets:Receivable:Other"
-                               :kontor.account/code "1410" :kontor.account/type :asset
+                               :kontor.account/code "1300" :kontor.account/type :asset
                                :kontor.account/active true}])
           db0 (d/db conn)
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           inv-jnl (:db/id (d/entity db0 [:kontor.journal/code "INV"]))
           bank-jnl (:db/id (d/entity db0 [:kontor.journal/code "BANK"]))
           leg (fn [acct amt] {:kontor.posting/account acct
@@ -585,7 +585,7 @@
                                   :kontor.transaction/effective-date jan-15
                                   :kontor.transaction/state :posted
                                   :kontor.transaction/posted-at jan-15}
-                    :postings [(leg (ace db0 "1410") 100.00M)
+                    :postings [(leg (ace db0 "1300") 100.00M)
                                (leg (ace db0 "4400") -100.00M)]}))
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct :commodity-eid eur})
@@ -600,19 +600,19 @@
           ;; invoices, here straddling two receivable accounts.
           match {:kind :settle
                  :transactions [(tx-of "INV-2026-001") (tx-of "INV-2026-004")]}
-          opts {:ar-codes #{"1400" "1410"}}
+          opts {:ar-codes #{"1200" "1300"}}
           e (try (recon/commit-match-tx-data db acme-bl match bank-jnl opts)
                  nil
                  (catch clojure.lang.ExceptionInfo ex ex))]
       (is (some? e) "the ambiguous contra account is refused, not guessed")
       (is (= :reconciliation/ambiguous-contra-account (:type (ex-data e))))
-      (is (= #{"1400" "1410"} (set (:candidate-codes (ex-data e))))
+      (is (= #{"1200" "1300"} (set (:candidate-codes (ex-data e))))
           "the error names both candidates so the caller can choose")
 
       (testing "and the caller's explicit :contra-account resolves it"
         (let [tx-data (recon/commit-match-tx-data
                        db acme-bl match bank-jnl
-                       (assoc opts :contra-account (ace db "1400")))]
+                       (assoc opts :contra-account (ace db "1200")))]
           (is (seq tx-data))))
 
       (testing "zero candidates is refused too, rather than yielding nil"
@@ -636,7 +636,7 @@
           _ (post-invoice! conn "INV-2026-005" "ACME" 1000)
           db0 (d/db conn)
           eur (:db/id (d/entity db0 [:kontor.commodity/symbol "EUR"]))
-          bank-acct (ace db0 "1200")
+          bank-acct (ace db0 "1800")
           _ (recon/ingest-statement! conn (bank-candidates)
                                      {:source-account-eid bank-acct :commodity-eid eur})
           db (d/db conn)

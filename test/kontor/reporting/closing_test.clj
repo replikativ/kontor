@@ -47,13 +47,13 @@
 (defn- seed-pnl-activity! [conn]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        recv (ace db "1400")          ; AR
+        recv (ace db "1200")          ; AR
         rev19 (ace db "4400")         ; revenue 19%
-        ust19 (ace db "3801")         ; output VAT
+        ust19 (ace db "3806")         ; output VAT
         ;; A pretend cash account for the expense — bank current.
-        bank (ace db "1200")
-        rent (ace db "6300")          ; Miete (expense)
-        sw   (ace db "6815")          ; Software (expense)
+        bank (ace db "1800")
+        rent (ace db "6310")          ; Miete (expense)
+        sw   (ace db "6837")          ; Software (expense)
         inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         exp-jnl (:db/id (d/entity db [:kontor.journal/code "EXP"]))]
     ;; A sales invoice: gross 1190, net 1000, VAT 190 — fully on Feb 15.
@@ -137,7 +137,7 @@
     (let [db (d/db conn)
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           rev (ace db "4400")
-          rent (ace db "6300")]
+          rent (ace db "6310")]
       (is (= -3000M (-> (balance/account-balance conn rev
                                                  {:as-of-valid dec-31})
                         (get eur)
@@ -156,7 +156,7 @@
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
           period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
-          retained (ace db "2900")
+          retained (ace db "2970")
           inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           {:keys [transaction-eid postings-count net-by-commodity]}
           (closing/close-period! conn
@@ -177,10 +177,10 @@
       (let [rev-bal  (-> (balance/account-balance conn (ace db "4400")
                                                   {:as-of-valid jan-1-26})
                          (get eur))
-            rent-bal (-> (balance/account-balance conn (ace db "6300")
+            rent-bal (-> (balance/account-balance conn (ace db "6310")
                                                   {:as-of-valid jan-1-26})
                          (get eur))
-            sw-bal   (-> (balance/account-balance conn (ace db "6815")
+            sw-bal   (-> (balance/account-balance conn (ace db "6837")
                                                   {:as-of-valid jan-1-26})
                          (get eur))
             ret-bal  (-> (balance/account-balance conn retained
@@ -208,7 +208,7 @@
     (seed-pnl-activity! conn)
     (let [db (d/db conn)
           period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
-          retained (ace db "2900")
+          retained (ace db "2970")
           inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))]
       (closing/close-period! conn
                              {:period-eid period-eid
@@ -224,7 +224,7 @@
   (let [conn (bootstrap)
         db (d/db conn)
         period-eid (d/q '[:find ?p . :where [?p :kontor.period/name "FY2025"]] db)
-        retained (ace db "2900")
+        retained (ace db "2970")
         inv-jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         result (closing/close-period! conn
                                       {:period-eid period-eid
@@ -245,7 +245,7 @@
           {:keys [close-result period-close-tx-report]}
           (de-closing/close-fiscal-year! conn {:period-eid period-eid})
           db (d/db conn)
-          retained (ace db "2900")
+          retained (ace db "2970")
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
           ret-bal (-> (balance/account-balance conn retained
                                                {:as-of-valid jan-1-26})

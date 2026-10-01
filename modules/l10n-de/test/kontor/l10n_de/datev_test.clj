@@ -42,9 +42,9 @@
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
         jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
-        rec (account-eid db "1400") rev (account-eid db "4400")
-        ust (account-eid db "3801")
-        exp (account-eid db "6800") vor (account-eid db "1576")
+        rec (account-eid db "1200") rev (account-eid db "4400")
+        ust (account-eid db "3806")
+        exp (account-eid db "6815") vor (account-eid db "1406")
         pay (account-eid db "3300")]
     (v/transact-with-validation
      conn

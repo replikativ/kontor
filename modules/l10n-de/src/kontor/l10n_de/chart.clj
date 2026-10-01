@@ -106,20 +106,20 @@
    :einnahmen          "4400"  ; Erlöse 19%
    :gehalt             "6020"
    ;; Operating expenses
-   :buero              "6800"
-   :telekommunikation  "6820"
-   :software           "6815"
+   :buero              "6815"
+   :telekommunikation  "6805"
+   :software           "6837"
    :werbung            "6600"
    :reisekosten        "6650"
-   :bewirtung          "6670"
-   :fahrzeuge          "6825"
-   :miete              "6300"
-   :nebenkosten        "6400"
-   :versicherung       "6520"
-   :steuerberater      "6850"
-   :beitraege          "6530"
+   :bewirtung          "6640"
+   :fahrzeuge          "6500"
+   :miete              "6310"
+   :nebenkosten        "6325"
+   :versicherung       "6400"
+   :steuerberater      "6825"
+   :beitraege          "6420"
    ;; Catch-all
-   :sonstige-betriebsausgaben "6900"})
+   :sonstige-betriebsausgaben "6300"})
 
 (defn category->contra-eid
   "Resolve `category` to a contra-account `:db/id` against `db`.

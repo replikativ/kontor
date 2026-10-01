@@ -55,7 +55,7 @@
   [conn {:keys [ext-id date net partner] :as fix}]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
+        recv (ace db "1200") rev (ace db "4400") ust (ace db "3806")
         jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
         partner-eid (:db/id (d/entity db [:kontor.partner/external-id partner]))
         net30 (pt/by-code db "NET30")
@@ -93,7 +93,7 @@
 (deftest aging-rows-each-invoice-lands-in-correct-bucket
   (let [conn (bootstrap)
         _ (seed-fixtures conn)
-        rows (aging/aging-rows (d/db conn) #{"1400"} :as-of as-of)
+        rows (aging/aging-rows (d/db conn) #{"1200"} :as-of as-of)
         by-ext (into {} (map (juxt :external-id :bucket)) rows)]
     (is (= 5 (count rows)))
     (is (= :not-yet-due (get by-ext "INV-A")))
@@ -105,7 +105,7 @@
 (deftest aging-rows-include-due-date-and-days-overdue
   (let [conn (bootstrap)
         _ (seed-fixtures conn)
-        rows (aging/aging-rows (d/db conn) #{"1400"} :as-of as-of)
+        rows (aging/aging-rows (d/db conn) #{"1200"} :as-of as-of)
         by-ext (into {} (map (juxt :external-id identity)) rows)
         inv-c (get by-ext "INV-C")]
     (is (= #inst "2026-03-17T00:00:00Z" (:due-date inv-c))
@@ -117,7 +117,7 @@
         _ (seed-fixtures conn)
         db  (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        sum (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of)]
+        sum (aging/aging-summary-by-bucket db #{"1200"} :as-of as-of)]
     (is (= 1190.00M (:amount (:not-yet-due sum))) "INV-A 1000 + 19% = 1190")
     (is (= 595.00M  (:amount (:0-30 sum)))        "INV-B 500 + 19% = 595")
     (is (= 952.00M  (:amount (:31-60 sum)))       "INV-C 800 + 19% = 952")
@@ -134,7 +134,7 @@
 (deftest aging-by-partner-groups-correctly
   (let [conn (bootstrap)
         _ (seed-fixtures conn)
-        per-partner (aging/aging-by-partner (d/db conn) #{"1400"} :as-of as-of)
+        per-partner (aging/aging-by-partner (d/db conn) #{"1200"} :as-of as-of)
         by-name (into {} (map (juxt :partner-name identity)) per-partner)]
     (is (= 3 (count per-partner)) "ACME / BETA / GAMMA")
     (is (= 1785.00M (:amount (:total (get by-name "ACME GmbH"))))  "INV-A + INV-B")
@@ -153,7 +153,7 @@
     (let [conn (bootstrap)
           db (d/db conn)
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-          recv (ace db "1400") rev (ace db "4400") ust (ace db "3801")
+          recv (ace db "1200") rev (ace db "4400") ust (ace db "3806")
           jnl (:db/id (d/entity db [:kontor.journal/code "INV"]))
           part (:db/id (d/entity db [:kontor.partner/external-id "ACME"]))
           ;; Manual transaction with explicit due-date but no payment-term
@@ -175,7 +175,7 @@
                     {:kontor.posting/account ust :kontor.posting/amount -19.00M
                      :kontor.posting/commodity eur :kontor.posting/posted-at #inst "2026-01-01T00:00:00Z"}]}))
           _ (v/transact-with-validation conn tx)
-          rows (aging/aging-rows (d/db conn) #{"1400"} :as-of as-of)
+          rows (aging/aging-rows (d/db conn) #{"1200"} :as-of as-of)
           inv-man (first (filter #(= "INV-MAN" (:external-id %)) rows))]
       (is (some? inv-man))
       (is (= #inst "2026-04-15T00:00:00Z" (:due-date inv-man)))
@@ -191,16 +191,16 @@
   (let [conn (bootstrap)                     ; chart installed, no invoices
         db   (d/db conn)
         eur  (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        sum  (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of)]
+        sum  (aging/aging-summary-by-bucket db #{"1200"} :as-of as-of)]
     (is (= 0M (:amount (:total sum))))
     (is (= eur (:commodity (:total sum)))
         "denominated from :kontor.account/commodity on the AR account")
     (is (every? #(= eur (:commodity (get sum %)))
                 [:not-yet-due :0-30 :31-60 :61-90 :90+]))
     (testing "aging-by-partner is empty rather than erroring"
-      (is (= [] (aging/aging-by-partner db #{"1400"} :as-of as-of))))
+      (is (= [] (aging/aging-by-partner db #{"1200"} :as-of as-of))))
     (testing "an explicit :commodity wins"
-      (let [usd-sum (aging/aging-summary-by-bucket db #{"1400"} :as-of as-of
+      (let [usd-sum (aging/aging-summary-by-bucket db #{"1200"} :as-of as-of
                                                    :commodity :made-up)]
         (is (= :made-up (:commodity (:total usd-sum))))))))
 

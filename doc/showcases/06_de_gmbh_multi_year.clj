@@ -163,7 +163,7 @@
   {:db/id "a-4650" :kontor.account/code "4650"
    :kontor.account/name "Bewirtungskosten 70% abziehbar"
    :kontor.account/type :expense :kontor.account/active true}
-  {:db/id "a-1000" :kontor.account/code "1000"
+  {:db/id "a-1000" :kontor.account/code "1600"
    :kontor.account/name "Kasse"
    :kontor.account/type :asset :kontor.account/active true}])
 
@@ -351,7 +351,7 @@
          :kontor.posting/amount 1200.00M
          :kontor.posting/commodity eur
          :kontor.posting/narration "Wrong account — should have been Bewirtungskosten"}
-        {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1000"]] (d/db conn))
+        {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1600"]] (d/db conn))
          :kontor.posting/amount -1200.00M
          :kontor.posting/commodity eur
          :kontor.posting/narration "Kasse"}]})
@@ -454,7 +454,7 @@ misclassified-tx-eid
        :kontor.posting/amount 1200.00M
        :kontor.posting/commodity eur
        :kontor.posting/narration "Bewirtungsaufwand 100% (70% abziehbar per EStG §4(5) Nr. 2)"}
-      {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1000"]] (d/db conn))
+      {:kontor.posting/account (d/q '[:find ?e . :where [?e :kontor.account/code "1600"]] (d/db conn))
        :kontor.posting/amount -1200.00M
        :kontor.posting/commodity eur
        :kontor.posting/narration "Kasse (no cash impact — reclassification only)"}]})

@@ -44,9 +44,9 @@
   [conn external-id date net]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        receivable (account-eid db "1400")
+        receivable (account-eid db "1200")
         revenue    (account-eid db "4400")
-        ust-19     (account-eid db "3801")
+        ust-19     (account-eid db "3806")
         jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd  (bigdec net)
         vat-bd  (.setScale (.multiply net-bd (bigdec "0.19"))
@@ -77,9 +77,9 @@
   [conn external-id date net]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        receivable (account-eid db "1400")
+        receivable (account-eid db "1200")
         revenue    (account-eid db "4300")
-        ust-7      (account-eid db "3806")
+        ust-7      (account-eid db "3801")
         jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd (bigdec net)
         vat-bd (.setScale (.multiply net-bd (bigdec "0.07"))
@@ -113,8 +113,8 @@
   [conn external-id date net]
   (let [db (d/db conn)
         eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-        expense    (account-eid db "6800")
-        vorst-19   (account-eid db "1576")
+        expense    (account-eid db "6815")
+        vorst-19   (account-eid db "1406")
         payable    (account-eid db "3300")
         jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
         net-bd  (bigdec net)
@@ -153,7 +153,7 @@
         tags (d/q '[:find [?n ...] :where [_ :kontor.account-tag/name ?n]] db)]
     (is (>= (count accounts) 30) (str "loaded " (count accounts) " accounts"))
     (is (account-eid db "4400") "Erlöse 19% present")
-    (is (account-eid db "1576") "Vorsteuer 19% present")
+    (is (account-eid db "1406") "Vorsteuer 19% present")
     (is (contains? (set tags) "ust-81") "tag :ust-81 materialized")
     (is (contains? (set tags) "ust-66") "tag :ust-66 materialized")))
 
@@ -228,9 +228,9 @@
     (let [conn (bootstrap)
           db (d/db conn)
           eur (:db/id (d/entity db [:kontor.commodity/symbol "EUR"]))
-          receivable (account-eid db "1400")
+          receivable (account-eid db "1200")
           revenue    (account-eid db "4400")
-          ust-19     (account-eid db "3801")
+          ust-19     (account-eid db "3806")
           jnl        (:db/id (d/entity db [:kontor.journal/code "INV"]))
           ;; A DRAFT (no :posted state)
           tx (posting/build-transaction

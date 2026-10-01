@@ -67,8 +67,8 @@
   "DE output-VAT (USt) payable account code per USt class. The exempt
    class routes to no USt account — steuerfreie Umsätze emit no USt
    posting (the whole line goes to revenue)."
-  {:standard "3801"   ; Umsatzsteuer 19%
-   :reduced  "3806"}) ; Umsatzsteuer 7%
+  {:standard "3806"   ; Umsatzsteuer 19%
+   :reduced  "3801"}) ; Umsatzsteuer 7%
 
 (defn- compute-ust
   "USt amount for `net` at `vat-rate` (a percentage BigDecimal such as
