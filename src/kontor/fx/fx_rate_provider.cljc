@@ -486,3 +486,89 @@
    maintainer to ADR-072 + the credential-source documentation."
   [& providers]
   (->ChainedProvider (vec providers)))
+
+;; ============================================================================
+;; ConsensusProvider — poll every source; answer only when they agree.
+;; ============================================================================
+
+(defn- observed-rates
+  "Non-nil, non-zero rates for `q` from every provider, ascending."
+  [providers q]
+  (->> providers
+       (keep (fn [p]
+               (let [r (resolve-rate p q)]
+                 (when (and (money/amount? r) (not (money/amount-zero? r)))
+                   r))))
+       (sort money/compare-amounts)
+       vec))
+
+(defn- lower-median
+  "Middle value, the lower of the two for an even count — so the result is
+   always a rate some source published."
+  [sorted]
+  (nth sorted (quot (dec (count sorted)) 2)))
+
+(defn- within-band?
+  "True when (max − min) ≤ `consensus` × `max-spread-bps` / 10000, compared by
+   multiplication so no scale or rounding mode is involved."
+  [sorted consensus max-spread-bps]
+  (let [spread (money/add-amount (peek sorted) (money/negate-amount (first sorted)))]
+    (<= (money/compare-amounts
+         (money/multiply-amounts spread (money/->amount 10000))
+         (money/multiply-amounts consensus (money/->amount max-spread-bps)))
+        0)))
+
+(defn- agreed-rate
+  "Consensus of `sorted`, or nil when too few sources answered or they disagree
+   beyond the band."
+  [sorted {:keys [min-sources max-spread-bps]}]
+  (when (>= (count sorted) min-sources)
+    (let [consensus (lower-median sorted)]
+      (when (within-band? sorted consensus max-spread-bps)
+        consensus))))
+
+(defrecord ConsensusProvider [providers opts]
+  FxRateProvider
+  (provider-id [_] :consensus)
+  (resolve-rate [_ q]
+    (let [from (:from-commodity q)]
+      (if (and (some? from) (= from (:to-commodity q)))
+        (money/->amount 1)
+        (agreed-rate (observed-rates providers q) opts))))
+  (resolve-period-rates [_ q]
+    (->> providers
+         (mapcat #(resolve-period-rates % q))
+         (group-by (comp inst-ms :at-date))
+         (keep (fn [[_ samples]]
+                 (let [sorted (->> samples
+                                   (map :rate)
+                                   (filter #(and (money/amount? %)
+                                                 (not (money/amount-zero? %))))
+                                   (sort money/compare-amounts)
+                                   vec)]
+                   (when-let [r (agreed-rate sorted opts)]
+                     {:at-date (:at-date (first samples)) :rate r}))))
+         (sort-by (comp inst-ms :at-date))
+         vec)))
+
+(defn consensus
+  "A ConsensusProvider over peer `providers`: the median rate when at least
+   `:min-sources` of them answered and the high-low spread is within
+   `:max-spread-bps` of it; nil otherwise.
+
+   `:max-spread-bps` is required — no single tolerance suits both a major fiat
+   pair and a thin crypto pair. `:min-sources` defaults to 2.
+
+   Identity short-circuits to 1 on the raw query values; this provider holds no
+   conn, so both sides must be spelled the same way. Like [[chain]] it does not
+   catch — a scaffold among the peers throws."
+  [opts & providers]
+  (let [{:keys [min-sources max-spread-bps] :or {min-sources 2}} opts]
+    (when-not (and (number? max-spread-bps) (not (neg? max-spread-bps)))
+      (throw (ex-info "ConsensusProvider requires :max-spread-bps (non-negative basis points)"
+                      {:opts opts})))
+    (when (< min-sources 2)
+      (throw (ex-info "ConsensusProvider requires :min-sources >= 2"
+                      {:min-sources min-sources})))
+    (->ConsensusProvider (vec providers)
+                         {:min-sources min-sources :max-spread-bps max-spread-bps})))
