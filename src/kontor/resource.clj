@@ -12,6 +12,7 @@
             [kontor.governance :as governance]
             [kontor.money :as money]
             [kontor.posting.build :as posting-build]
+            [kontor.resource.identity :as identity]
             [kontor.resource.validate :as validate]
             [kontor.schema :as schema]
             ;; Registers the composed in-transaction gate for direct resource
@@ -25,10 +26,10 @@
 
 (def resource-journal [:kontor.journal/code "RESOURCE"])
 
-(def source-id (UUID/fromString "00000000-0000-0000-0000-000000000171"))
-(def sink-id   (UUID/fromString "00000000-0000-0000-0000-000000000172"))
+(def source-id identity/source-id)
+(def sink-id identity/sink-id)
 
-(defn account-ref [id] [:kontor.resource-account/id id])
+(defn account-ref [id] (identity/account-ref id))
 
 (defn- resolve-eid
   "Resolve an eid, lookup ref, ident, or pulled entity map without throwing."
@@ -48,8 +49,8 @@
     (d/q '[:find ?e . :in $ ?ident :where [?e :db/ident ?ident]] db ref)
     :else nil))
 
-(def source-account (account-ref source-id))
-(def sink-account   (account-ref sink-id))
+(def source-account identity/source-account)
+(def sink-account identity/sink-account)
 
 (def default-seeds
   [{:kontor.ledger/code validate/resource-ledger-code

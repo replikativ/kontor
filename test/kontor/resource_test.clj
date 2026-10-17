@@ -8,9 +8,18 @@
             [kontor.gate :as gate]
             [kontor.governance :as governance]
             [kontor.resource :as resource]
+            [kontor.resource.identity :as identity]
             [kontor.resource.validate :as resource-validate]))
 
 (def unit "microUSD")
+
+(deftest pure-resource-identities-are-the-backends-canonical-identities
+  (is (identical? identity/source-account resource/source-account))
+  (is (identical? identity/sink-account resource/sink-account))
+  (is (= #uuid "00000000-0000-0000-0000-000000000171" identity/source-id))
+  (is (= #uuid "00000000-0000-0000-0000-000000000172" identity/sink-id))
+  (let [id (random-uuid)]
+    (is (= [:kontor.resource-account/id id] (identity/account-ref id) (resource/account-ref id)))))
 
 (declare report-with-ops)
 
