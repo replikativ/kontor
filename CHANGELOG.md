@@ -10,6 +10,12 @@ incompatible changes are called out explicitly.
 
 ## [Unreleased]
 
+### Added
+- `kontor.resource.identity` exposes the existing source/sink account identities
+  and account lookup-ref constructor without loading Datahike or initializing
+  accounting validation. `kontor.resource` continues to use those same values;
+  resource authorization and writer invariants are unchanged.
+
 ### Cleanup
 - Internal research notes (189 files) and development-history docs
   moved out of the public repo into a local-only `.internal/`
